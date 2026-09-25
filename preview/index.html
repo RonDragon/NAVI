@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NAVI — Navi Space</title>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --void:#071522; --grid:#0D2633; --cyan:#18E0E8; --lime:#B8F23C; --orange:#FF8A32; --coral:#FF5268; --ice:#EAFBFF;
+  --muted:#7f9bb0; --panel:#0b1c2acc; --line:#18e0e833;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:var(--void);color:var(--ice);font-family:Heebo,system-ui,sans-serif;overflow:hidden}
+#stage{position:fixed;inset:0}
+canvas{display:block}
+
+/* HUD */
+.hud-top{position:fixed;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:16px 18px;pointer-events:none;z-index:5}
+.brand{font-weight:800;font-size:20px;letter-spacing:.5px}
+.brand span{color:var(--cyan);text-shadow:0 0 18px #18e0e8aa}
+.brand small{display:block;font-weight:400;font-size:12px;color:var(--muted);margin-top:2px}
+.telemetry{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--muted);text-align:left;direction:ltr;line-height:1.7}
+.telemetry b{color:var(--cyan);font-weight:500}
+
+.bubble{position:fixed;top:9%;left:50%;transform:translateX(-50%);max-width:min(420px,86vw);background:#0b1c2ae6;border:1px solid var(--line);
+  border-radius:18px;padding:12px 16px;font-size:15px;line-height:1.5;box-shadow:0 0 30px #18e0e81f;z-index:5;transition:opacity .35s, transform .35s;text-align:center}
+.bubble .who{font-size:11px;color:var(--cyan);font-weight:500;margin-bottom:2px}
+.bubble.hide{opacity:0;transform:translate(-50%,-8px)}
+
+.dock{position:fixed;bottom:0;left:0;right:0;padding:12px 14px calc(14px + env(safe-area-inset-bottom));z-index:5;
+  background:linear-gradient(180deg,transparent,#071522 38%)}
+.row{display:flex;gap:8px;overflow-x:auto;padding:4px 2px;scrollbar-width:none;justify-content:center;flex-wrap:wrap}
+.row::-webkit-scrollbar{display:none}
+.label{font-size:11px;color:var(--muted);text-align:center;margin:6px 0 2px}
+.chip{flex:none;border:1px solid var(--line);background:var(--panel);color:var(--ice);font:500 13px Heebo;padding:8px 13px;border-radius:99px;cursor:pointer;
+  transition:all .18s;backdrop-filter:blur(6px)}
+.chip:hover{border-color:#18e0e888}
+.chip.on{background:#18e0e81f;border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 16px #18e0e833}
+.chip.mood{border-color:#b8f23c33}
+.chip.mood.on{background:#b8f23c1a;border-color:var(--lime);color:var(--lime);box-shadow:0 0 16px #b8f23c33}
+
+/* Link Up intro */
+#linkup{position:fixed;inset:0;z-index:20;background:var(--void);pointer-events:none;overflow:hidden}
+#linkup .scan{position:absolute;left:0;right:0;height:2px;top:-4px;background:var(--cyan);box-shadow:0 0 24px 6px #18e0e888}
+#linkup .grid{position:absolute;inset:-50%;background:
+  repeating-linear-gradient(0deg,#18e0e822 0 1px,transparent 1px 40px),
+  repeating-linear-gradient(90deg,#18e0e822 0 1px,transparent 1px 40px);opacity:0}
+#linkup .core{position:absolute;top:50%;left:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:var(--cyan);box-shadow:0 0 30px 10px #18e0e8;opacity:0}
+#linkup .txt{position:absolute;bottom:22%;left:0;right:0;text-align:center;font:500 12px 'IBM Plex Mono';letter-spacing:4px;color:var(--cyan);opacity:0;direction:ltr}
+.play #linkup .scan{animation:scan .15s .1s linear forwards}
+.play #linkup .grid{animation:grid .25s .25s ease-in forwards}
+.play #linkup .core{animation:core .3s .45s ease-out forwards}
+.play #linkup .txt{animation:txt .5s .2s ease forwards}
+.play #linkup{animation:out .25s .75s ease forwards}
+@keyframes scan{to{top:100%}}
+@keyframes grid{0%{opacity:.9;transform:scale(1)}100%{opacity:0;transform:scale(.02)}}
+@keyframes core{0%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(40)}}
+@keyframes txt{0%{opacity:0}50%{opacity:1}100%{opacity:.6}}
+@keyframes out{to{opacity:0;visibility:hidden}}
+
+#loading{position:fixed;inset:0;display:grid;place-items:center;font:500 13px 'IBM Plex Mono';color:var(--muted);z-index:4;direction:ltr}
+@media (max-width:640px){.telemetry{display:none}.chip{font-size:12px;padding:7px 11px}}
+</style>
+</head>
+<body>
+<div id="stage"></div>
+<div id="loading">LOADING NAVI…</div>
+
+<div class="hud-top">
+  <div class="brand"><span>NAVI</span> Space<small>פיקסל · ער</small></div>
+  <div class="telemetry" id="tele">LINK <b>OK</b><br>STATE <b id="tState">idle</b><br>MOOD <b id="tMood">calm</b></div>
+</div>
+
+<div class="bubble hide" id="bubble"><div class="who">פיקסל</div><div id="say"></div></div>
+
+<div class="dock">
+  <div class="label">מצב רוח</div>
+  <div class="row" id="moods"></div>
+  <div class="label">אנימציות</div>
+  <div class="row" id="anims"></div>
+  <div class="label">פנים</div>
+  <div class="row" id="faces"></div>
+</div>
+
+<div id="linkup"><div class="grid"></div><div class="scan"></div><div class="core"></div><div class="txt">LINK UP</div></div>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+} }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const MODEL = '../assets/models/navi-v1.glb';
+
+// ---------- renderer / scene ----------
+const stage = document.getElementById('stage');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+stage.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x071522);
+scene.fog = new THREE.Fog(0x071522, 4, 11);
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.55;
+
+const camera = new THREE.PerspectiveCamera(32, innerWidth / innerHeight, 0.05, 50);
+camera.position.set(0, 0.72, 3.1);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0, 0.52, 0);
+controls.enableDamping = true;
+controls.minDistance = 1.4; controls.maxDistance = 5;
+controls.maxPolarAngle = Math.PI * 0.52;
+controls.enablePan = false;
+
+// lights: warm key, cool electric rim ("Creature warm. System electric.")
+const key = new THREE.DirectionalLight(0xfff1e0, 1.5); key.position.set(1.6, 2.6, 2.4); scene.add(key);
+const rim = new THREE.DirectionalLight(0x18e0e8, 1.8); rim.position.set(-2.2, 1.6, -2.2); scene.add(rim);
+const fill = new THREE.HemisphereLight(0x9fd8ff, 0x071522, 0.6); scene.add(fill);
+
+// floor: glowing cyan grid + halo platform
+const grid = new THREE.GridHelper(14, 56, 0x0f3a4a, 0x0f3a4a);
+grid.material.transparent = true; grid.material.opacity = 0.35; scene.add(grid);
+const halo = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 64),
+  new THREE.MeshBasicMaterial({ color: 0x18e0e8, transparent: true, opacity: 0.55, side: THREE.DoubleSide }));
+halo.rotation.x = -Math.PI / 2; halo.position.y = 0.003; scene.add(halo);
+const disc = new THREE.Mesh(new THREE.CircleGeometry(0.42, 64),
+  new THREE.MeshBasicMaterial({ color: 0x0d2633, transparent: true, opacity: 0.9 }));
+disc.rotation.x = -Math.PI / 2; disc.position.y = 0.002; scene.add(disc);
+
+// data packets drifting in the background (the "system" around him)
+const packets = new THREE.Group(); scene.add(packets);
+const pGeo = new THREE.BoxGeometry(0.018, 0.018, 0.018);
+for (let i = 0; i < 70; i++) {
+  const m = new THREE.Mesh(pGeo, new THREE.MeshBasicMaterial({ color: i % 5 ? 0x18e0e8 : 0xb8f23c, transparent: true, opacity: 0.8 }));
+  m.position.set((Math.random() - 0.5) * 8, Math.random() * 3, -1.5 - Math.random() * 4);
+  m.userData.v = 0.08 + Math.random() * 0.25;
+  packets.add(m);
+}
+
+// post: bloom only catches the emissive seams
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+// high threshold: lit fur/cream stays below it, only the emissive seams (intensity 4+) bloom
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.25, 1.6);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+// ---------- state ----------
+const thenOf = new Map();   // action -> clip to play after a one-shot finishes
+let navi, mixer, actions = {}, current, faceMesh, morph = {}, bones = {}, glowMats = [];
+const face = { Blink: 0, Happy: 0, MouthOpen: 0 };        // manual face layer
+const faceTarget = { Blink: 0, Happy: 0, MouthOpen: 0 };
+let glowTarget = 3, glow = 3;
+const pointer = new THREE.Vector2();
+let lookWeight = 1;
+
+const LOOP = new Set(['Idle', 'TailWag', 'Sleep']);
+const ANIM_HE = { Idle: 'נשימה', Wave: 'נפנוף', HappyJump: 'קפיצת שמחה', TailWag: 'כשכוש זנב', Listen: 'מקשיב', Sleep: 'שינה' };
+
+const MOODS = {
+  calm:    { he: 'רגוע',   anim: 'Idle',      glow: 3, face: {},              say: 'אני פה. יום שקט, אה?' },
+  happy:   { he: 'שמח',    anim: 'HappyJump', glow: 5.5,  face: { Happy: 1 },     say: 'ידעתי שהלך לך טוב!! 🎉', then: 'TailWag' },
+  curious: { he: 'סקרן',   anim: 'Listen',    glow: 4,   face: {},              say: 'רגע... מה זה? ספר לי עוד.' },
+  greet:   { he: 'שלום',   anim: 'Wave',      glow: 4,   face: { Happy: 0.6 },  say: 'היי! חזרת 👋', then: 'Idle' },
+  playful: { he: 'שובב',   anim: 'TailWag',   glow: 4.5,  face: { Happy: 0.8, MouthOpen: 0.35 }, say: 'בוא נעשה משהו כיפי.' },
+  tired:   { he: 'עייף',   anim: 'Sleep',     glow: 1.5, face: {},              say: 'זזזז... תעיר אותי בבוקר.' },
+};
+
+// ---------- load ----------
+new GLTFLoader().load(MODEL, (gltf) => {
+  navi = gltf.scene;
+  scene.add(navi);
+  navi.traverse((o) => {
+    if (o.isBone) bones[o.name] = o;
+    if (o.isMesh) {
+      o.frustumCulled = false;
+      if (o.morphTargetDictionary && o.morphTargetDictionary.Blink !== undefined) { faceMesh = o; morph = o.morphTargetDictionary; }
+      const mats = Array.isArray(o.material) ? o.material : [o.material];
+      for (const m of mats) if (m.name === 'Navi_Glow') glowMats.push(m);
+    }
+  });
+  mixer = new THREE.AnimationMixer(navi);
+  for (const clip of gltf.animations) {
+    const a = mixer.clipAction(clip);
+    if (!LOOP.has(clip.name)) { a.setLoop(THREE.LoopOnce); a.clampWhenFinished = true; }
+    actions[clip.name] = a;
+  }
+  mixer.addEventListener('finished', (e) => {
+    const next = thenOf.get(e.action) || 'Idle';
+    play(next);
+  });
+  buildUI();
+  play('Idle', 0);
+  document.getElementById('loading').remove();
+  document.body.classList.add('play');           // Link Up intro
+  setTimeout(() => setMood('greet'), 900);
+}, undefined, (err) => {
+  document.getElementById('loading').textContent = 'FAILED TO LOAD MODEL — serve this folder over http';
+  console.error(err);
+});
+
+// ---------- animation control ----------
+function play(name, fade = 0.35, then) {
+  const next = actions[name]; if (!next) return;
+  thenOf.set(next, then);
+  if (current === next && LOOP.has(name)) return;
+  next.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(fade).play();
+  if (current && current !== next) current.fadeOut(fade);
+  current = next;
+  lookWeight = name === 'Sleep' ? 0 : 1;
+  document.getElementById('tState').textContent = name.toLowerCase();
+  document.querySelectorAll('#anims .chip').forEach(c => c.classList.toggle('on', c.dataset.k === name));
+}
+
+function setMood(k) {
+  const m = MOODS[k];
+  play(m.anim, 0.35, m.then);
+  glowTarget = m.glow;
+  for (const f in faceTarget) faceTarget[f] = m.face[f] || 0;
+  say(m.say);
+  document.getElementById('tMood').textContent = k;
+  document.querySelectorAll('#moods .chip').forEach(c => c.classList.toggle('on', c.dataset.k === k));
+}
+
+let sayTimer;
+function say(text) {
+  const b = document.getElementById('bubble');
+  document.getElementById('say').textContent = text;
+  b.classList.remove('hide');
+  clearTimeout(sayTimer);
+  sayTimer = setTimeout(() => b.classList.add('hide'), 3800);
+}
+
+function buildUI() {
+  const mk = (parent, k, label, cls, fn) => {
+    const b = document.createElement('button');
+    b.className = 'chip ' + cls; b.dataset.k = k; b.textContent = label; b.onclick = fn;
+    document.getElementById(parent).appendChild(b); return b;
+  };
+  for (const k in MOODS) mk('moods', k, MOODS[k].he, 'mood', () => setMood(k));
+  for (const n of Object.keys(actions)) mk('anims', n, ANIM_HE[n] || n, '', () => play(n, 0.35, LOOP.has(n) ? undefined : 'Idle'));
+  const faceHe = { Blink: 'מצמוץ', Happy: 'חיוך', MouthOpen: 'פה פתוח' };
+  for (const f of ['Blink', 'Happy', 'MouthOpen']) {
+    const b = mk('faces', f, faceHe[f], '', () => {
+      if (f === 'Blink') { blinkNow(); return; }
+      faceTarget[f] = faceTarget[f] > 0.5 ? 0 : 1; b.classList.toggle('on', faceTarget[f] > 0.5);
+    });
+  }
+}
+
+// ---------- procedural life layer ----------
+let blinkT = 0, nextBlink = 2.5;
+function blinkNow() { blinkT = 0.0001; }
+
+addEventListener('pointermove', (e) => {
+  pointer.x = (e.clientX / innerWidth) * 2 - 1;
+  pointer.y = -(e.clientY / innerHeight) * 2 + 1;
+});
+// tap on Navi = little hop of joy
+const ray = new THREE.Raycaster();
+renderer.domElement.addEventListener('click', (e) => {
+  if (!navi) return;
+  ray.setFromCamera(new THREE.Vector2((e.clientX / innerWidth) * 2 - 1, -(e.clientY / innerHeight) * 2 + 1), camera);
+  if (ray.intersectObject(navi, true).length) {
+    const lines = ['היי 😄', 'זה מדגדג!', 'אני פה.', 'מה נעשה היום?'];
+    play('HappyJump', 0.2, 'Idle'); faceTarget.Happy = 1; setTimeout(() => (faceTarget.Happy = 0), 1800);
+    say(lines[Math.floor(Math.random() * lines.length)]);
+  }
+});
+
+const headQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
+let look = new THREE.Vector2();
+const clock = new THREE.Clock();
+
+function tick() {
+  const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
+  controls.update();
+  if (mixer) mixer.update(dt);
+
+  if (navi) {
+    // head follows the pointer (added on top of the animation)
+    look.lerp(pointer, 1 - Math.pow(0.001, dt));
+    const head = bones['Head'];
+    if (head && lookWeight > 0) {
+      tmpE.set(-look.y * 0.22 * lookWeight, look.x * 0.45 * lookWeight, 0, 'YXZ');
+      headQ.setFromEuler(tmpE);
+      head.quaternion.multiply(headQ);
+    }
+
+    // face: blend manual layer over animation morphs
+    for (const f in face) face[f] += (faceTarget[f] - face[f]) * (1 - Math.pow(0.002, dt));
+    nextBlink -= dt;
+    if (nextBlink <= 0 && current !== actions.Sleep) { blinkNow(); nextBlink = 2 + Math.random() * 4; }
+    let blink = 0;
+    if (blinkT > 0) { blinkT += dt; blink = Math.sin(Math.min(blinkT / 0.16, 1) * Math.PI); if (blinkT > 0.16) blinkT = 0; }
+    if (faceMesh) {
+      const inf = faceMesh.morphTargetInfluences;
+      inf[morph.Blink] = Math.max(inf[morph.Blink], blink, face.Blink);
+      inf[morph.Happy] = Math.max(inf[morph.Happy], face.Happy);
+      inf[morph.MouthOpen] = Math.max(inf[morph.MouthOpen], face.MouthOpen);
+    }
+
+    // glow breathes with mood
+    glow += (glowTarget - glow) * (1 - Math.pow(0.05, dt));
+    const pulse = glow * (0.88 + 0.12 * Math.sin(t * 2.2));
+    for (const m of glowMats) m.emissiveIntensity = pulse;
+    halo.material.opacity = 0.3 + 0.04 * glow;
+  }
+
+  for (const p of packets.children) { p.position.y += p.userData.v * dt; if (p.position.y > 3.2) p.position.y = 0; p.rotation.y += dt; }
+  composer.render();
+  requestAnimationFrame(tick);
+}
+tick();
+
+// keep Navi centred in the space above the control dock, and step back on narrow screens
+function frame() {
+  const w = innerWidth, h = innerHeight;
+  camera.aspect = w / h;
+  const dockH = document.querySelector('.dock').offsetHeight;
+  camera.setViewOffset(w, h, 0, dockH * 0.5, w, h);
+  const dist = w / h < 0.75 ? 5.6 : 4.4;
+  const dir = camera.position.clone().sub(controls.target).normalize();
+  camera.position.copy(controls.target).addScaledVector(dir, dist);
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h); composer.setSize(w, h);
+}
+addEventListener('resize', frame);
+frame();
+new ResizeObserver(frame).observe(document.querySelector('.dock'));
+</script>
+</body>
+</html>
