@@ -10,3 +10,4 @@ __pycache__/
 # brain runtime data (conversation + memory are personal)
 brain/data/
 node_modules/
+renders/*-comparison-*

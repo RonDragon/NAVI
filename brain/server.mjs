@@ -23,7 +23,7 @@ const CONFIG = { operator_gender: process.env.NAVI_OPERATOR_GENDER || "masculine
 const PERSONA = fs.readFileSync(path.join(here, "persona.md"), "utf8").replace("{{operator_gender}}", CONFIG.operator_gender);
 
 const MOODS = ["calm", "happy", "curious", "greet", "playful", "tired"];
-const ANIMS = ["Idle", "Wave", "HappyJump", "TailWag", "Listen", "Sleep"];
+const ANIMS = ["Idle", "Wave", "HappyJump", "TailWag", "Listen", "Sleep", "Celebrate", "Concerned", "Stretch"];
 const FOLLOWUP_INTENTS = ["ask_outcome", "prepare", "check_progress", "support", "celebrate"];
 const SCHEMA = {
   type: "object",

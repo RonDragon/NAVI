@@ -125,7 +125,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
-const MODEL = '../assets/models/navi-v1.glb';
+const MODEL = '../assets/models/navi-v2.glb';
 
 // ---------- renderer / scene ----------
 const stage = document.getElementById('stage');
@@ -188,18 +188,18 @@ composer.addPass(new OutputPass());
 // ---------- state ----------
 const thenOf = new Map();   // action -> clip to play after a one-shot finishes
 let navi, mixer, actions = {}, current, faceMesh, morph = {}, bones = {}, glowMats = [];
-const face = { Blink: 0, Happy: 0, MouthOpen: 0 };        // manual face layer
-const faceTarget = { Blink: 0, Happy: 0, MouthOpen: 0 };
+const face = { Blink: 0, Happy: 0, MouthOpen: 0, Surprised: 0, Sad: 0 };        // manual face layer
+const faceTarget = { Blink: 0, Happy: 0, MouthOpen: 0, Surprised: 0, Sad: 0 };
 let glowTarget = 3, glow = 3;
 const pointer = new THREE.Vector2();
 let lookWeight = 1;
 
-const LOOP = new Set(['Idle', 'TailWag', 'Sleep']);
-const ANIM_HE = { Idle: 'נשימה', Wave: 'נפנוף', HappyJump: 'קפיצת שמחה', TailWag: 'כשכוש זנב', Listen: 'מקשיב', Sleep: 'שינה' };
+const LOOP = new Set(['Idle', 'TailWag', 'Sleep', 'Inspect', 'Concerned']);
+const ANIM_HE = { Idle: 'נשימה', Wave: 'נפנוף', HappyJump: 'קפיצת שמחה', TailWag: 'כשכוש זנב', Listen: 'מקשיב', Sleep: 'שינה', Notice: 'שם לב', Stretch: 'מתמתח', Inspect: 'בודק', Celebrate: 'חוגג', Concerned: 'מודאג' };
 
 const MOODS = {
   calm:    { he: 'רגוע',   anim: 'Idle',      glow: 3, face: {},              say: 'אני פה. יום שקט, אה?' },
-  happy:   { he: 'שמח',    anim: 'HappyJump', glow: 5.5,  face: { Happy: 1 },     say: 'ידעתי שהלך לך טוב!! 🎉', then: 'TailWag' },
+  happy:   { he: 'שמח',    anim: 'Celebrate', glow: 5.5,  face: { Happy: 1 },     say: 'ידעתי שהלך לך טוב!! 🎉', then: 'TailWag' },
   curious: { he: 'סקרן',   anim: 'Listen',    glow: 4,   face: {},              say: 'רגע... מה זה? ספר לי עוד.' },
   greet:   { he: 'שלום',   anim: 'Wave',      glow: 4,   face: { Happy: 0.6 },  say: 'היי! חזרת 👋', then: 'Idle' },
   playful: { he: 'שובב',   anim: 'TailWag',   glow: 4.5,  face: { Happy: 0.8, MouthOpen: 0.35 }, say: 'בוא נעשה משהו כיפי.' },
@@ -231,7 +231,7 @@ new GLTFLoader().load(MODEL, (gltf) => {
     play(next);
   });
   buildUI();
-  play('Idle', 0);
+  play('Inspect', 0);                              // you catch him in the middle of something
   document.getElementById('loading').remove();
   document.body.classList.add('play');           // Link Up intro
   setTimeout(openingLine, 900);
@@ -351,7 +351,8 @@ function applyBrain(out) {
   glowTarget = m.glow;
   faceTarget.Happy = out.face.happy; faceTarget.MouthOpen = voiceOn ? 0 : out.face.mouthOpen * 0.6;   // with voice, lip sync drives the mouth
   setTimeout(() => { faceTarget.MouthOpen = 0; faceTarget.Happy = 0; }, Math.min(6000, 1500 + out.reply.length * 60));
-  const loopy = ['Idle', 'TailWag', 'Sleep'].includes(out.animation);
+  const loopy = LOOP.has(out.animation);
+  if (out.animation === 'Concerned') faceTarget.Sad = 0.7;
   play(out.animation, 0.35, loopy ? undefined : (out.mood === 'playful' ? 'TailWag' : 'Idle'));
   document.getElementById('tMood').textContent = out.mood;
   say(out.reply);
@@ -366,13 +367,38 @@ addEventListener('pointerdown', () => {
   ensureAudio();
   if (pendingSpeech) { const t = pendingSpeech; pendingSpeech = null; speakOut(t); }
 }, { once: false });
+// ---------- idle life (GPT review #2): he has his own activities; he notices you and comes over ----------
+let noticed = false, lastInteraction = performance.now();
+function notice(then) {
+  lastInteraction = performance.now();
+  if (noticed) { then && then(); return; }
+  noticed = true;
+  react('heard', 1200);
+  play('Notice', 0.3, 'Idle');                    // head turns to you, ears perk, small step closer
+  setTimeout(() => then && then(), 1100);
+}
+['pointerdown', 'keydown'].forEach((ev) => addEventListener(ev, () => notice(), { passive: true }));
+setInterval(() => {                                 // left alone for a while -> he does something on his own
+  if (!navi || chatForm.classList.contains('busy') || currentSrc) return;
+  const idleFor = (performance.now() - lastInteraction) / 1000;
+  const cur = current && Object.keys(actions).find((k) => actions[k] === current);
+  if (idleFor < 30 || (cur && !['Idle', 'Inspect'].includes(cur))) return;
+  const hour = new Date().getHours();
+  if (hour >= 23 || hour < 6) { play('Sleep'); noticed = false; return; }
+  const pick = Math.random();
+  if (pick < 0.35) play('Stretch', 0.4, 'Idle');
+  else if (pick < 0.7) { play('Inspect', 0.5); noticed = false; }
+  else play('TailWag', 0.4);
+  lastInteraction = performance.now() - 15000;     // next activity in ~15-30s, not every tick
+}, 5000);
+
 async function openingLine() {
   try {
     const r = await fetch('/api/greeting', { method: 'POST' });
     const out = await r.json();
     if (!r.ok) throw new Error(out.error || r.status);
-    if (out.silent) { play('Idle'); return; }          // nothing worth interrupting for
-    applyBrain(out);
+    if (out.silent) return;                            // nothing to say: he keeps doing his thing until you interact
+    notice(() => applyBrain(out));
   } catch (err) { console.warn('[greeting]', err); setMood('greet'); }
 }
 
@@ -412,8 +438,8 @@ function buildUI() {
   };
   for (const k in MOODS) mk('moods', k, MOODS[k].he, 'mood', () => setMood(k));
   for (const n of Object.keys(actions)) mk('anims', n, ANIM_HE[n] || n, '', () => play(n, 0.35, LOOP.has(n) ? undefined : 'Idle'));
-  const faceHe = { Blink: 'מצמוץ', Happy: 'חיוך', MouthOpen: 'פה פתוח' };
-  for (const f of ['Blink', 'Happy', 'MouthOpen']) {
+  const faceHe = { Blink: 'מצמוץ', Happy: 'חיוך', MouthOpen: 'פה פתוח', Surprised: 'מופתע', Sad: 'עצוב' };
+  for (const f of ['Blink', 'Happy', 'MouthOpen', 'Surprised', 'Sad']) {
     const b = mk('faces', f, faceHe[f], '', () => {
       if (f === 'Blink') { blinkNow(); return; }
       faceTarget[f] = faceTarget[f] > 0.5 ? 0 : 1; b.classList.toggle('on', faceTarget[f] > 0.5);
@@ -457,8 +483,8 @@ const REFLEX = {
   heard:     { perk: .45, tilt: .10, nod: .05, wagAmp: .10, wagSpeed: 6,  face: {},              chirp: 'blip' },
   curious:   { perk: .70, tilt: .32, nod: 0,   wagAmp: .12, wagSpeed: 5,  face: {},              chirp: 'hm' },
   excited:   { perk: .95, tilt: 0,   nod: -.08, wagAmp: .55, wagSpeed: 14, face: { Happy: .9 },   chirp: 'yip' },
-  surprised: { perk: 1,   tilt: .05, nod: -.12, wagAmp: .05, wagSpeed: 4, face: { MouthOpen: .5 }, chirp: 'oh' },
-  concerned: { perk: -.6, tilt: .18, nod: .14, wagAmp: 0,   wagSpeed: 2,  face: {},              chirp: 'aw' },
+  surprised: { perk: 1,   tilt: .05, nod: -.12, wagAmp: .05, wagSpeed: 4, face: { Surprised: 1, MouthOpen: .3 }, chirp: 'oh' },
+  concerned: { perk: -.6, tilt: .18, nod: .14, wagAmp: 0,   wagSpeed: 2,  face: { Sad: .8 },       chirp: 'aw' },
   greeting:  { perk: .8,  tilt: .12, nod: 0,   wagAmp: .35, wagSpeed: 10, face: { Happy: .6 },   chirp: 'yip' },
 };
 // Instant local read of the message — no model call. Just enough to react like a creature while the brain thinks.
@@ -516,7 +542,10 @@ function tick() {
 
   if (navi) {
     // reflexes: fast attack (~150ms), slow release back to neutral
-    if (performance.now() > reflexUntil) Object.assign(reflexTarget, { perk: 0, tilt: 0, nod: 0, wagAmp: 0, wagSpeed: 6 });
+    if (performance.now() > reflexUntil) {
+      Object.assign(reflexTarget, { perk: 0, tilt: 0, nod: 0, wagAmp: 0, wagSpeed: 6 });
+      faceTarget.Surprised = 0; faceTarget.Sad = 0;
+    }
     const k = 1 - Math.pow(reflexUntil > performance.now() ? 1e-6 : 0.02, dt);
     for (const key in reflex) reflex[key] += (reflexTarget[key] - reflex[key]) * k;
     const ear = reflex.perk * 0.35;
@@ -546,6 +575,8 @@ function tick() {
       inf[morph.Blink] = Math.max(inf[morph.Blink], blink, face.Blink);
       inf[morph.Happy] = Math.max(inf[morph.Happy], face.Happy);
       inf[morph.MouthOpen] = Math.max(inf[morph.MouthOpen], face.MouthOpen, lipSync(dt) * 0.9);
+      if (morph.Surprised !== undefined) inf[morph.Surprised] = Math.max(inf[morph.Surprised], face.Surprised);
+      if (morph.Sad !== undefined) inf[morph.Sad] = Math.max(inf[morph.Sad], face.Sad);
     }
 
     // glow breathes with mood

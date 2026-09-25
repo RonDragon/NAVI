@@ -1,0 +1,9 @@
+00:02.562  blend            | Read blend: "C:\CloudeRepo\NAVI\assets\models\navi-v2.blend"
+Traceback (most recent call last):
+  File "C:\CloudeRepo\NAVI\tools\blender\validate_navi_v2.py", line 58, in <module>
+    assert not any(topology.values()),topology
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'nonmanifold_edges': 0, 'loose_vertices': 0, 'zero_area_faces': 12}
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

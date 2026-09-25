@@ -1,0 +1,100 @@
+{
+  "iteration": 3,
+  "blender": "5.2.2 LTS",
+  "auto_weights": "deterministic anatomical weights (v1 repair preserved)",
+  "before_repair": {
+    "unweighted": 9070,
+    "tail_foreign": 0,
+    "ear_foreign": 0
+  },
+  "bones": [
+    "LowerArm.L",
+    "Hand.L",
+    "Foot.L",
+    "Tail.3",
+    "Tail.4",
+    "Ear.L.2",
+    "Spine",
+    "UpperLeg.R",
+    "Hand.R",
+    "Chest",
+    "Foot.R",
+    "Ear.R.1",
+    "Ear.L.1",
+    "Neck",
+    "Tail.1",
+    "LowerLeg.R",
+    "Ear.R.2",
+    "Tail.2",
+    "Shoulder.L",
+    "UpperArm.L",
+    "UpperArm.R",
+    "Hips",
+    "UpperLeg.L",
+    "LowerLeg.L",
+    "Shoulder.R",
+    "Head",
+    "LowerArm.R"
+  ],
+  "vertices": 9070,
+  "faces": 8262,
+  "quads": 8036,
+  "triangles": 17736,
+  "height_m": 1.0,
+  "mirror_applied": true,
+  "actions": {
+    "Idle": [
+      0.0,
+      120.0
+    ],
+    "Wave": [
+      0.0,
+      90.0
+    ],
+    "HappyJump": [
+      0.0,
+      60.0
+    ],
+    "TailWag": [
+      0.0,
+      60.0
+    ],
+    "Listen": [
+      0.0,
+      90.0
+    ],
+    "Sleep": [
+      0.0,
+      120.0
+    ],
+    "Notice": [
+      0.0,
+      60.0
+    ],
+    "Stretch": [
+      0.0,
+      90.0
+    ],
+    "Inspect": [
+      0.0,
+      120.0
+    ],
+    "Celebrate": [
+      0.0,
+      75.0
+    ],
+    "Concerned": [
+      0.0,
+      90.0
+    ]
+  },
+  "after_repair": {
+    "unweighted": 0,
+    "not_normalized": 0,
+    "tail_foreign": 0,
+    "ear_foreign": 0,
+    "tail_vertices": 528,
+    "ear_vertices": 744,
+    "max_influences": 4
+  }
+}

@@ -1,0 +1,10 @@
+00:02.687  blend            | Read blend: "C:\CloudeRepo\NAVI\assets\models\navi-v2-review.blend"
+00:32.156  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-sleep.png'
+00:34.984  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-notice.png'
+00:37.687  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-stretch.png'
+00:40.640  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-inspect.png'
+00:43.234  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-celebrate.png'
+00:46.078  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-concerned.png'
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit
