@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NAVI — מוקאפים</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#070b14; --panel:#0e1524; --panel2:#131c30; --line:#1f2b45;
+  --cyan:#3be8ff; --cyan2:#1fb6d9; --blue:#4d7cff; --pink:#ff5fa2; --amber:#ffc24d; --green:#4dffa6;
+  --text:#e8f1ff; --muted:#8a9bbb; --dim:#5a6a88;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:radial-gradient(1200px 600px at 70% -10%,#12254a 0%,transparent 60%),var(--bg);color:var(--text);font-family:Rubik,system-ui,sans-serif;min-height:100vh;padding:40px 16px 80px}
+header{max-width:1200px;margin:0 auto 36px}
+header h1{font-size:40px;font-weight:800;letter-spacing:.5px}
+header h1 span{color:var(--cyan);text-shadow:0 0 24px #3be8ff88}
+header p{color:var(--muted);margin-top:8px;max-width:760px;line-height:1.6}
+.legend{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.legend b{font-weight:500;font-size:12px;padding:5px 10px;border:1px solid var(--line);border-radius:99px;color:var(--muted)}
+.grid{max-width:1200px;margin:0 auto;display:flex;flex-wrap:wrap;gap:44px 36px;justify-content:center}
+.shot{width:300px;display:flex;flex-direction:column;align-items:center}
+.shot .cap{margin-top:16px;text-align:center}
+.shot .cap h3{font-size:16px;font-weight:700}
+.shot .cap h3 i{font-style:normal;color:var(--cyan);font-family:'JetBrains Mono';font-size:12px;margin-left:6px}
+.shot .cap p{font-size:13px;color:var(--muted);line-height:1.55;margin-top:6px}
+
+/* phone */
+.phone{width:290px;height:600px;border-radius:44px;background:#02040a;padding:10px;box-shadow:0 0 0 1px #243150,0 30px 80px #000a,0 0 60px #3be8ff14;position:relative}
+.screen{width:100%;height:100%;border-radius:36px;overflow:hidden;position:relative;background:linear-gradient(180deg,#0b1426 0%,#0a1120 55%,#08101d 100%);display:flex;flex-direction:column}
+.notch{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:92px;height:24px;border-radius:14px;background:#000;z-index:5}
+.status{display:flex;justify-content:space-between;padding:12px 22px 0;font-size:12px;font-weight:500;color:#cfe0ff;direction:ltr}
+.topbar{display:flex;justify-content:space-between;align-items:center;padding:14px 18px 0}
+.topbar .name{font-weight:700;font-size:15px}
+.topbar .name small{display:block;font-weight:400;color:var(--muted);font-size:11px}
+.chip{font-size:10px;padding:4px 8px;border-radius:99px;background:#3be8ff14;color:var(--cyan);border:1px solid #3be8ff33;white-space:nowrap}
+
+/* navi space */
+.space{position:relative;flex:1;display:flex;align-items:flex-end;justify-content:center;overflow:hidden}
+.space::before{content:"";position:absolute;inset:auto -20% -30% -20%;height:70%;background:radial-gradient(closest-side,#3be8ff26,transparent 70%)}
+.floor{position:absolute;bottom:0;left:0;right:0;height:38%;background:
+  linear-gradient(180deg,transparent,#3be8ff08),
+  repeating-linear-gradient(90deg,#3be8ff14 0 1px,transparent 1px 28px),
+  repeating-linear-gradient(0deg,#3be8ff14 0 1px,transparent 1px 28px);
+  transform:perspective(220px) rotateX(58deg);transform-origin:bottom}
+.window{position:absolute;top:18px;left:22px;width:70px;height:54px;border-radius:8px;border:1px solid #3be8ff33;background:linear-gradient(180deg,#ffb86b55,#ff5fa233);box-shadow:inset 0 0 18px #ffc24d44}
+.window.night{background:linear-gradient(180deg,#1a2350,#0b1030);box-shadow:inset 0 0 18px #4d7cff44}
+.window.night::after{content:"✦";position:absolute;right:12px;top:8px;color:#fff9;font-size:10px}
+.prop{position:absolute;bottom:22%;font-size:20px;opacity:.85;filter:drop-shadow(0 0 6px #3be8ff66)}
+
+/* navi creature */
+.navi{position:relative;z-index:2;width:150px;height:150px;margin-bottom:9%;animation:breathe 3.2s ease-in-out infinite;cursor:pointer;filter:drop-shadow(0 0 18px #3be8ff55)}
+.navi.small{width:90px;height:90px;margin-bottom:0}
+.navi.tiny{width:54px;height:54px;margin:0;animation:none}
+.navi.jump{animation:jump .9s ease}
+.navi .eye{animation:blink 4.5s infinite;transform-origin:center;transform-box:fill-box}
+.navi .ear-l{animation:earL 5s ease-in-out infinite;transform-origin:bottom center;transform-box:fill-box}
+.navi .ear-r{animation:earR 5s ease-in-out infinite;transform-origin:bottom center;transform-box:fill-box}
+.navi .tail{animation:tail 2.4s ease-in-out infinite;transform-origin:15% 90%;transform-box:fill-box}
+.navi.sleep .eye{animation:none;transform:scaleY(.12)}
+.navi.sleep{animation:breathe 5s ease-in-out infinite}
+.navi.alert .ear-l,.navi.alert .ear-r{animation:none;transform:scaleY(1.12)}
+@keyframes breathe{0%,100%{transform:translateY(0) scale(1)}50%{transform:translateY(-4px) scale(1.02)}}
+@keyframes blink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes earL{0%,70%,100%{transform:rotate(0)}78%{transform:rotate(-9deg)}}
+@keyframes earR{0%,40%,100%{transform:rotate(0)}48%{transform:rotate(8deg)}}
+@keyframes tail{0%,100%{transform:rotate(0)}50%{transform:rotate(10deg)}}
+@keyframes jump{0%{transform:translateY(0)}35%{transform:translateY(-34px) scale(1.05)}60%{transform:translateY(0) scale(.97,1.03)}100%{transform:translateY(0)}}
+
+.zzz{position:absolute;z-index:3;top:34%;right:30%;color:#9fb6ff;font-weight:700;font-size:14px;animation:zz 2.6s ease-in-out infinite}
+@keyframes zz{0%{opacity:0;transform:translate(0,6px)}40%{opacity:1}100%{opacity:0;transform:translate(-10px,-18px)}}
+.spark{position:absolute;z-index:3;color:var(--amber);font-size:16px;animation:sp 1.8s ease-in-out infinite}
+@keyframes sp{0%,100%{opacity:.2;transform:scale(.7)}50%{opacity:1;transform:scale(1.2)}}
+
+/* speech & ui */
+.bubble{position:relative;z-index:3;margin:0 16px 10px;background:#101a2e;border:1px solid #3be8ff33;border-radius:18px;padding:12px 14px;font-size:14px;line-height:1.45;box-shadow:0 0 24px #3be8ff14}
+.bubble .who{font-size:10px;color:var(--cyan);margin-bottom:3px;font-weight:500}
+.bubble.me{background:#16213a;border-color:#4d7cff44;margin-right:60px}
+.bubble.soft{border-color:#ffffff14;background:#0f1729}
+.input{margin:6px 14px 14px;display:flex;gap:8px;align-items:center}
+.input .field{flex:1;background:#0f1729;border:1px solid var(--line);border-radius:99px;padding:10px 14px;font-size:13px;color:var(--dim)}
+.mic{width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,var(--cyan),var(--blue));color:#001;font-size:17px;box-shadow:0 0 18px #3be8ff66}
+.list{padding:10px 14px;display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.item{display:flex;gap:10px;align-items:flex-start;background:#0f1729;border:1px solid var(--line);border-radius:14px;padding:10px 12px}
+.item .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:15px;flex:none}
+.item .t{font-size:13px;line-height:1.4}
+.item .t small{display:block;color:var(--muted);font-size:11px;margin-top:2px}
+.item.hi{border-color:#ffc24d55;background:#1a1810}
+.tag{font-size:10px;padding:2px 7px;border-radius:99px;margin-right:auto;align-self:center;white-space:nowrap}
+.tag.act{background:#4dffa61a;color:var(--green)}
+.tag.ask{background:#ffc24d1a;color:var(--amber)}
+.tag.no{background:#ffffff0d;color:var(--muted)}
+.sec{font-size:11px;color:var(--muted);padding:12px 18px 2px;letter-spacing:.3px}
+.toggle{width:34px;height:20px;border-radius:99px;background:#243150;position:relative;flex:none;align-self:center;margin-right:auto}
+.toggle::after{content:"";position:absolute;top:3px;right:3px;width:14px;height:14px;border-radius:50%;background:#8a9bbb}
+.toggle.on{background:#1fb6d9}
+.toggle.on::after{right:auto;left:3px;background:#fff}
+.btns{display:flex;gap:8px;padding:0 16px 14px}
+.btn{flex:1;text-align:center;padding:10px;border-radius:12px;font-size:13px;font-weight:500;background:#16213a;border:1px solid var(--line)}
+.btn.pri{background:linear-gradient(135deg,var(--cyan2),var(--blue));border:none;color:#fff}
+.wave{display:flex;gap:4px;align-items:center;justify-content:center;height:46px;margin:4px 0 8px}
+.wave i{display:block;width:5px;border-radius:3px;background:var(--cyan);animation:wv 1s ease-in-out infinite}
+@keyframes wv{0%,100%{height:8px}50%{height:40px}}
+.notif{position:absolute;z-index:6;top:44px;left:10px;right:10px;background:#1a2438ee;backdrop-filter:blur(8px);border:1px solid #ffffff1a;border-radius:18px;padding:10px 12px;display:flex;gap:10px;align-items:center;animation:drop 4s ease-in-out infinite}
+@keyframes drop{0%,8%{transform:translateY(-120%);opacity:0}16%,80%{transform:translateY(0);opacity:1}92%,100%{transform:translateY(-120%);opacity:0}}
+.notif .t{font-size:12px;line-height:1.35}
+.notif .t b{display:block;font-size:11px;color:var(--muted);font-weight:500}
+.glow-line{height:1px;background:linear-gradient(90deg,transparent,#3be8ff66,transparent);margin:6px 16px}
+
+/* watch & pc */
+.watch{width:210px;height:250px;border-radius:58px;background:#02040a;padding:12px;box-shadow:0 0 0 1px #243150,0 20px 60px #000a;margin:60px 0 60px}
+.watch .face{width:100%;height:100%;border-radius:48px;background:radial-gradient(circle at 50% 70%,#3be8ff22,#060b16 70%);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;text-align:center;padding:14px}
+.watch .time{font-size:13px;color:var(--muted);direction:ltr}
+.watch .msg{font-size:13px;line-height:1.35}
+.pc{width:300px;height:210px;border-radius:12px;background:#0b1222;border:1px solid #243150;margin:110px 0 80px;position:relative;overflow:hidden;box-shadow:0 20px 60px #000a}
+.pc .bar{height:18px;background:#131c30;display:flex;gap:5px;align-items:center;padding:0 8px;direction:ltr}
+.pc .bar i{width:7px;height:7px;border-radius:50%;background:#2a3858}
+.pc .code{position:absolute;inset:18px 96px 0 0;padding:10px;font-family:'JetBrains Mono';font-size:8.5px;line-height:1.7;color:#5a7bb0;direction:ltr;text-align:left}
+.pc .side{position:absolute;top:18px;bottom:0;right:0;width:96px;background:#0e1830;border-left:1px solid #3be8ff22;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:8px 6px}
+.pc .side .b{font-size:9.5px;line-height:1.35;background:#101a2e;border:1px solid #3be8ff33;border-radius:10px;padding:6px;margin-bottom:6px}
+
+footer{max-width:1200px;margin:60px auto 0;color:var(--dim);font-size:12px;text-align:center;line-height:1.7}
+@media (max-width:640px){header h1{font-size:30px}.grid{gap:36px}}
+</style>
+</head>
+<body>
+
+<!-- The Navi creature: one reusable SVG symbol -->
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="fur" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e9fbff"/><stop offset="1" stop-color="#9fdcf0"/>
+    </linearGradient>
+    <linearGradient id="mark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3be8ff"/><stop offset="1" stop-color="#4d7cff"/>
+    </linearGradient>
+    <symbol id="navi" viewBox="0 0 200 200">
+      <path class="tail" d="M140 150 C185 150 192 105 170 92 C182 118 160 132 140 128 Z" fill="url(#mark)" opacity=".95"/>
+      <path class="ear-l" d="M62 70 L48 18 L92 52 Z" fill="url(#fur)"/>
+      <path class="ear-l" d="M64 62 L56 32 L82 52 Z" fill="url(#mark)"/>
+      <path class="ear-r" d="M138 70 L152 18 L108 52 Z" fill="url(#fur)"/>
+      <path class="ear-r" d="M136 62 L144 32 L118 52 Z" fill="url(#mark)"/>
+      <ellipse cx="100" cy="148" rx="46" ry="38" fill="url(#fur)"/>
+      <path d="M80 150 Q100 170 120 150" stroke="url(#mark)" stroke-width="4" fill="none" stroke-linecap="round" opacity=".8"/>
+      <ellipse cx="100" cy="92" rx="56" ry="46" fill="url(#fur)"/>
+      <path d="M100 50 L106 64 L100 72 L94 64 Z" fill="url(#mark)"/>
+      <path d="M52 100 Q62 96 66 104" stroke="url(#mark)" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <path d="M148 100 Q138 96 134 104" stroke="url(#mark)" stroke-width="4" fill="none" stroke-linecap="round"/>
+      <g class="eye"><ellipse cx="78" cy="92" rx="11" ry="14" fill="#0a1830"/><circle cx="82" cy="86" r="4" fill="#fff"/><circle cx="75" cy="97" r="2" fill="#3be8ff"/></g>
+      <g class="eye"><ellipse cx="122" cy="92" rx="11" ry="14" fill="#0a1830"/><circle cx="126" cy="86" r="4" fill="#fff"/><circle cx="119" cy="97" r="2" fill="#3be8ff"/></g>
+      <path d="M95 110 Q100 115 105 110" stroke="#0a1830" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <ellipse cx="66" cy="110" rx="7" ry="4" fill="#ff5fa2" opacity=".35"/>
+      <ellipse cx="134" cy="110" rx="7" ry="4" fill="#ff5fa2" opacity=".35"/>
+      <ellipse cx="80" cy="184" rx="13" ry="7" fill="#bfeaf7"/><ellipse cx="120" cy="184" rx="13" ry="7" fill="#bfeaf7"/>
+    </symbol>
+  </defs>
+</svg>
+
+<header>
+  <h1><span>NAVI</span> — מוקאפים ראשונים</h1>
+  <p>Navi אחד, ישות אחת, בכל המכשירים. המסכים מראים את הרגעים המרכזיים: המפגש הראשון, בוקר רגיל, איך הוא "שומע" על מה שקורה לך (הודעות, מיילים, שיחות), שיחה בקול, ההרשאות שאתה נותן לו, ומה הוא יודע עליך. אפשר ללחוץ על ה-Navi.</p>
+  <div class="legend"><b>🟢 הוא עושה לבד</b><b>🟡 מציע ומחכה לאישור</b><b>⚪ רק רואה, לא נוגע</b></div>
+</header>
+
+<main class="grid">
+
+  <!-- 1 Awakening -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>21:04</span><span>●●● 5G</span></div>
+      <div class="space" style="align-items:center;flex-direction:column;justify-content:center">
+        <div style="position:absolute;inset:0;background:radial-gradient(circle at 50% 45%,#3be8ff33,transparent 45%)"></div>
+        <svg class="navi" style="margin:0"><use href="#navi"/></svg>
+        <div class="spark" style="top:30%;right:26%">✦</div><div class="spark" style="top:40%;left:22%;animation-delay:.6s">✦</div>
+      </div>
+      <div class="bubble"><div class="who">???</div>...אה. היי. אתה זה שהעיר אותי?</div>
+      <div class="bubble me">כן, זה אני. נעים מאוד.</div>
+      <div class="bubble soft" style="text-align:center;font-size:13px;color:var(--muted)">איך תקרא לו?</div>
+      <div class="input"><div class="field">הקלד שם...</div><div class="mic">✓</div></div>
+    </div></div>
+    <div class="cap"><h3>1. התעוררות <i>Awakening</i></h3><p>לא ביצה ולא בוחרים דמות מתפריט. פוגשים אותו קודם, ורק אחרי רגע קצר נותנים לו שם.</p></div>
+  </div>
+
+  <!-- 2 Morning -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>07:12</span><span>●●● 5G</span></div>
+      <div class="topbar"><div class="name">פיקסל<small>ער, קצת מנומנם</small></div><span class="chip">📅 3 פגישות היום</span></div>
+      <div class="space">
+        <div class="window"></div><div class="floor"></div>
+        <div class="prop" style="left:30px">🪴</div><div class="prop" style="right:34px">📚</div>
+        <svg class="navi" onclick="hop(this)"><use href="#navi"/></svg>
+      </div>
+      <div class="bubble"><div class="who">פיקסל</div>שלוש פגישות עד אחת. קשוח.</div>
+      <div class="bubble">והראיון של אתמול, עדיין לא סיפרת לי איך היה 👀</div>
+      <div class="input"><div class="field">דבר איתו...</div><div class="mic">🎙</div></div>
+    </div></div>
+    <div class="cap"><h3>2. בוקר רגיל <i>Navi Space</i></h3><p>המסך הראשי הוא החדר שלו, לא צ'אט. הוא כבר ראה את היומן, והוא זוכר לשאול על הראיון (Follow-up).</p></div>
+  </div>
+
+  <!-- 3 Senses digest -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>13:40</span><span>●●● 5G</span></div>
+      <div class="notif"><div style="font-size:20px">💬</div><div class="t"><b>WhatsApp · דני</b>שלחתי לך את המסמך המעודכן</div></div>
+      <div class="topbar" style="margin-top:4px"><div class="name">בזמן שהיית בפגישה<small>פיקסל סינן 23 התראות</small></div></div>
+      <div style="display:flex;justify-content:center;margin-top:6px"><svg class="navi small alert"><use href="#navi"/></svg></div>
+      <div class="list">
+        <div class="item hi"><div class="ic" style="background:#ffc24d22">📞</div><div class="t">אמא התקשרה פעמיים<small>לא השאירה הודעה · זה חריג</small></div><span class="tag ask">להתקשר?</span></div>
+        <div class="item"><div class="ic" style="background:#4dffa61a">💬</div><div class="t">דני שלח את המסמך<small>זה מה שחיכית לו אחרי הפגישה</small></div><span class="tag act">שמרתי</span></div>
+        <div class="item"><div class="ic" style="background:#4d7cff22">✉️</div><div class="t">הבנק: דף חשבון חודשי<small>לא דחוף</small></div><span class="tag no">רק ראיתי</span></div>
+        <div class="item"><div class="ic" style="background:#ffffff0d">🔕</div><div class="t">עוד 20 התראות<small>קבוצות, מבצעים, רשתות</small></div><span class="tag no">הסתרתי</span></div>
+      </div>
+    </div></div>
+    <div class="cap"><h3>3. החושים שלו <i>Senses</i></h3><p>הוא לא "קורא הכול". הוא רואה את זרם ההתראות, מסנן, ומביא רק מה שחשוב לך, כולל הקשר ("זה מה שחיכית לו").</p></div>
+  </div>
+
+  <!-- 4 Voice -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>18:22</span><span>●●● 5G</span></div>
+      <div class="topbar"><div class="name">פיקסל מקשיב<small>🔴 המיקרופון פעיל, רק עכשיו</small></div><span class="chip">לחוץ-לדבר</span></div>
+      <div class="space">
+        <div class="window"></div><div class="floor"></div>
+        <svg class="navi alert"><use href="#navi"/></svg>
+      </div>
+      <div class="wave"><i style="animation-delay:0s"></i><i style="animation-delay:.1s"></i><i style="animation-delay:.2s"></i><i style="animation-delay:.3s"></i><i style="animation-delay:.15s"></i><i style="animation-delay:.25s"></i><i style="animation-delay:.05s"></i></div>
+      <div class="bubble me">"תזכור שבחמישי יש לי ארוחה אצל סבתא, ושאני צריך לקנות לה פרחים"</div>
+      <div class="bubble"><div class="who">פיקסל</div>רשמתי. אזכיר לך בחמישי בצהריים, שיהיה זמן לעבור בחנות 🌷</div>
+    </div></div>
+    <div class="cap"><h3>4. הוא שומע אותך <i>Voice</i></h3><p>דיבור טבעי בעברית. ברירת המחדל: לוחצים ומדברים. האוזניים מזדקפות כשהוא מקשיב, ותמיד רואים מתי המיקרופון פעיל.</p></div>
+  </div>
+
+  <!-- 5 After call -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>19:05</span><span>●●● 5G</span></div>
+      <div class="topbar"><div class="name">שיחה הסתיימה<small>יוסי · 12 דקות</small></div><span class="chip">📞 אחרי שיחה</span></div>
+      <div class="space">
+        <div class="window night"></div><div class="floor"></div>
+        <svg class="navi"><use href="#navi"/></svg>
+      </div>
+      <div class="bubble"><div class="who">פיקסל</div>דיברת עם יוסי. יש משהו שכדאי שאזכור?</div>
+      <div class="bubble me">כן, הוא עובר דירה בראשון ומבקש עזרה</div>
+      <div class="bubble"><div class="who">פיקסל</div>אז ראשון בבוקר תפוס. לשים ביומן?</div>
+      <div class="btns"><div class="btn">לא עכשיו</div><div class="btn pri">כן, תשים</div></div>
+    </div></div>
+    <div class="cap"><h3>5. אחרי שיחת טלפון <i>Call recap</i></h3><p>הוא לא מקליט שיחות (זה לא חוקי ברוב המקרים, וגם חסום בטלפון). הוא יודע שהייתה שיחה ושואל אותך. שנייה אחת, וזה בזיכרון.</p></div>
+  </div>
+
+  <!-- 6 Permissions -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>20:30</span><span>●●● 5G</span></div>
+      <div class="topbar"><div class="name">מה פיקסל יכול לראות<small>אתה מחליט, בכל רגע</small></div></div>
+      <div class="sec">חושים</div>
+      <div class="list" style="padding-top:4px">
+        <div class="item"><div class="ic" style="background:#3be8ff1a">🔔</div><div class="t">התראות מהטלפון<small>WhatsApp, SMS, מיילים · אנדרואיד</small></div><div class="toggle on"></div></div>
+        <div class="item"><div class="ic" style="background:#4d7cff22">✉️</div><div class="t">Gmail<small>קריאה בלבד · שליחה רק באישור</small></div><div class="toggle on"></div></div>
+        <div class="item"><div class="ic" style="background:#4dffa61a">📅</div><div class="t">יומן<small>קריאה · יצירה באישור</small></div><div class="toggle on"></div></div>
+        <div class="item"><div class="ic" style="background:#ffc24d1a">📞</div><div class="t">שיחות<small>רק מי ומתי, בלי תוכן</small></div><div class="toggle on"></div></div>
+        <div class="item"><div class="ic" style="background:#ff5fa21a">🎙</div><div class="t">"היי פיקסל" תמיד מקשיב<small>צורך סוללה · אנדרואיד בלבד</small></div><div class="toggle"></div></div>
+        <div class="item"><div class="ic" style="background:#ffffff0d">📍</div><div class="t">מיקום<small>רק "בבית / בעבודה"</small></div><div class="toggle"></div></div>
+      </div>
+    </div></div>
+    <div class="cap"><h3>6. הרשאות <i>Senses control</i></h3><p>כל חוש הוא הרשאה נפרדת, עם רמה: רואה, מציע או פועל. בלי הרשאה, אין חוש.</p></div>
+  </div>
+
+  <!-- 7 What you know -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>21:15</span><span>●●● 5G</span></div>
+      <div class="topbar"><div class="name">מה פיקסל יודע עליך<small>142 דברים · 9 אנשים</small></div></div>
+      <div class="sec">אנשים</div>
+      <div class="list" style="padding-top:4px">
+        <div class="item"><div class="ic" style="background:#ff5fa21a">👩</div><div class="t">אמא<small>מתקשרת בערבים · יום הולדת 14.3</small></div><span class="tag no">ערוך · שכח</span></div>
+        <div class="item"><div class="ic" style="background:#4d7cff22">🧑</div><div class="t">דני<small>עמית לעבודה · פרויקט המצגת</small></div><span class="tag no">ערוך · שכח</span></div>
+      </div>
+      <div class="sec">הרגלים שהוא למד</div>
+      <div class="list" style="padding-top:4px">
+        <div class="item"><div class="ic" style="background:#4dffa61a">🏋️</div><div class="t">מעדיף להתאמן בערב<small>נלמד מ-4 אימונים · ספטמבר</small></div><span class="tag no">נכון?</span></div>
+        <div class="item"><div class="ic" style="background:#ffc24d1a">☕</div><div class="t">"קפה קודם" לפני שמדברים על עבודה<small>הבדיחה הקבועה שלכם</small></div><span class="tag act">❤</span></div>
+      </div>
+      <div class="btns" style="margin-top:auto"><div class="btn">ייצוא</div><div class="btn">רגיש 🔒</div></div>
+    </div></div>
+    <div class="cap"><h3>7. שקיפות מלאה <i>What you know about me</i></h3><p>כל דבר שהוא זוכר: מאיפה הוא למד את זה, ואפשרות לתקן או למחוק. מידע רגיש (בריאות, כסף) מופרד.</p></div>
+  </div>
+
+  <!-- 8 Big win -->
+  <div class="shot">
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status"><span>17:48</span><span>●●● 5G</span></div>
+      <div class="space">
+        <div class="window"></div><div class="floor"></div>
+        <div class="spark" style="top:24%;right:22%">✦</div><div class="spark" style="top:34%;left:20%;animation-delay:.4s">✦</div><div class="spark" style="top:18%;left:40%;animation-delay:.9s">✦</div>
+        <svg class="navi" style="animation:jump 1.2s ease infinite"><use href="#navi"/></svg>
+      </div>
+      <div class="bubble me">קיבלתי את התפקיד!!</div>
+      <div class="bubble"><div class="who">פיקסל</div>ידעתי!! אמרתי לך אתמול שהלך לך טוב 🎉</div>
+      <div class="bubble soft" style="font-size:12px;color:var(--muted);text-align:center">📌 נשמר כרגע משותף: "היינו יחד כשקיבלת את התפקיד"</div>
+      <div class="input"><div class="field">דבר איתו...</div><div class="mic">🎙</div></div>
+    </div></div>
+    <div class="cap"><h3>8. רגע משותף <i>Shared moment</i></h3><p>לא "+50 XP". זה זיכרון ששניכם הייתם בו, ומהדברים שהופכים אותו לבלתי ניתן להחלפה.</p></div>
+  </div>
+
+  <!-- 9 Watch -->
+  <div class="shot">
+    <div class="watch"><div class="face">
+      <svg class="navi tiny"><use href="#navi"/></svg>
+      <div class="time">13:02</div>
+      <div class="msg">עוד שעה יוצאים לראיון. יש לך את זה 💪</div>
+    </div></div>
+    <div class="cap"><h3>9. בשעון <i>v0.2</i></h3><p>אותו Navi, גוף קטן יותר: ראש, מבט ומשפט אחד. לא עוד אפליקציה.</p></div>
+  </div>
+
+  <!-- 10 PC -->
+  <div class="shot">
+    <div class="pc">
+      <div class="bar"><i></i><i></i><i></i></div>
+      <div class="code">function syncNavi(state) {<br>&nbsp;&nbsp;const mem = await recall(q);<br>&nbsp;&nbsp;if (!mem) throw new Err(<br>&nbsp;&nbsp;&nbsp;&nbsp;"missing context");<br>&nbsp;&nbsp;return plan(mem, state);<br>}<br><br>// TODO: finish presentation</div>
+      <div class="side">
+        <div class="b">חזרת למחשב. אמרת בבוקר שתסיים את המצגת 🙂</div>
+        <svg class="navi tiny" style="width:48px;height:48px"><use href="#navi"/></svg>
+      </div>
+    </div>
+    <div class="cap"><h3>10. במחשב <i>v0.2</i></h3><p>הוא עומד בצד המסך וממשיך את מה שאמרת לו בשעון לפני שעתיים. Navi אחד, בכל מקום.</p></div>
+  </div>
+
+</main>
+
+<footer>NAVI · מוקאפים v0.1 · הדמות היא placeholder לבדיקת כיוון, לא עיצוב סופי. באפליקציה עצמה האנימציה תהיה Rive.</footer>
+
+<script>
+function hop(el){el.classList.remove('jump');void el.getBoundingClientRect();el.classList.add('jump');setTimeout(()=>el.classList.remove('jump'),900)}
+document.querySelectorAll('.navi').forEach(n=>{if(!n.onclick)n.addEventListener('click',()=>hop(n))})
+</script>
+</body>
+</html>
