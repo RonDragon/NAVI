@@ -1,0 +1,95 @@
+C:\CloudeRepo\NAVI\tools\blender\build_navi.py:31: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m=bpy.data.materials.new(name); m.use_nodes=True
+Warning: Bone Heat Weighting: failed to find solution for one or more bones
+NAVI WEIGHT REPORT {
+  "iteration": 2,
+  "blender": "5.2.2 LTS",
+  "auto_weights": "completed",
+  "before_repair": {
+    "unweighted": 9440,
+    "tail_foreign": 0,
+    "ear_foreign": 0
+  },
+  "bones": [
+    "Hand.L",
+    "Tail.1",
+    "LowerLeg.R",
+    "Ear.L.2",
+    "Ear.L.1",
+    "Tail.4",
+    "UpperArm.L",
+    "Ear.R.1",
+    "Ear.R.2",
+    "Neck",
+    "LowerArm.L",
+    "Foot.R",
+    "UpperArm.R",
+    "Spine",
+    "UpperLeg.L",
+    "Shoulder.R",
+    "Hips",
+    "Tail.3",
+    "Shoulder.L",
+    "Chest",
+    "LowerLeg.L",
+    "Head",
+    "Tail.2",
+    "Foot.L",
+    "LowerArm.R",
+    "UpperLeg.R",
+    "Hand.R"
+  ],
+  "vertices": 9440,
+  "faces": 8600,
+  "quads": 8340,
+  "triangles": 18468,
+  "height_m": 1.0,
+  "mirror_applied": true,
+  "actions": {
+    "Idle": [
+      0.0,
+      120.0
+    ],
+    "Wave": [
+      0.0,
+      90.0
+    ],
+    "HappyJump": [
+      0.0,
+      60.0
+    ],
+    "TailWag": [
+      0.0,
+      60.0
+    ],
+    "Listen": [
+      0.0,
+      90.0
+    ],
+    "Sleep": [
+      0.0,
+      120.0
+    ]
+  },
+  "after_repair": {
+    "unweighted": 0,
+    "not_normalized": 0,
+    "tail_foreign": 0,
+    "ear_foreign": 0,
+    "tail_vertices": 352,
+    "ear_vertices": 792,
+    "max_influences": 2
+  }
+}
+C:\CloudeRepo\NAVI\tools\blender\build_navi.py:450: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world=bpy.data.worlds.new('Navi dark studio');scene.world.use_nodes=True
+00:37.687  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter2-front.png'
+00:41.078  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter2-side.png'
+00:44.015  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter2-back.png'
+00:46.937  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter2-threequarter.png'
+00:46.969  image.write      | ERROR OpenImageIO write failed: Could not open file "C:\Users\ADMIN\.thumbnails\large\blender_22632_7ee7deaf0a87e6856a1ac64bd015bc31.png.png"
+Info: Saved as "navi-v1-review.blend"
+NAVI BUILD COMPLETE
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

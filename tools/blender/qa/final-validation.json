@@ -1,0 +1,46 @@
+{
+  "glb_bytes": 774428,
+  "triangles": 14872,
+  "mesh_count": 1,
+  "material_count": 8,
+  "animations": [
+    "Idle",
+    "Wave",
+    "HappyJump",
+    "TailWag",
+    "Listen",
+    "Sleep"
+  ],
+  "shape_keys": [
+    "Blink",
+    "Happy",
+    "MouthOpen"
+  ],
+  "height_m": 1.0,
+  "bones": 27,
+  "all_weights_normalized": true,
+  "tail_vertices": 264,
+  "ear_vertices": 744,
+  "tail_only_test_max_leg_motion_m": 0.0,
+  "tail_only_test_max_tail_motion_m": 0.13083965922291177,
+  "loop_endpoint_max_deltas": {
+    "Idle": 1.0124358171042812e-17,
+    "TailWag": 5.304700003879706e-17,
+    "Sleep": 0
+  },
+  "symmetry_unpaired_vertices": 0,
+  "embedded_images": 1,
+  "status": "PASS",
+  "topology": {
+    "nonmanifold_edges": 0,
+    "loose_vertices": 0,
+    "zero_area_faces": 0
+  },
+  "rest_clearance": {
+    "tail_body_intersections": 0,
+    "tail_body_min_distance_m": 0.009893974289298058,
+    "ear_torso_min_distance_m": 0.2021031677722931
+  },
+  "round_trip_height_m": 0.9999999914665807,
+  "round_trip_import": "PASS"
+}

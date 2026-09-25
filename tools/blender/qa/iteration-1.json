@@ -1,0 +1,80 @@
+{
+  "iteration": 1,
+  "blender": "5.2.2 LTS",
+  "auto_weights": "completed",
+  "before_repair": {
+    "unweighted": 13772,
+    "tail_foreign": 0,
+    "ear_foreign": 0
+  },
+  "bones": [
+    "Ear.R.1",
+    "Hand.L",
+    "Shoulder.R",
+    "Ear.L.2",
+    "LowerLeg.R",
+    "Chest",
+    "Hips",
+    "Spine",
+    "Tail.3",
+    "Shoulder.L",
+    "Tail.2",
+    "Hand.R",
+    "UpperArm.R",
+    "LowerLeg.L",
+    "Foot.L",
+    "LowerArm.R",
+    "Tail.4",
+    "Head",
+    "Tail.1",
+    "UpperArm.L",
+    "Ear.L.1",
+    "Ear.R.2",
+    "UpperLeg.R",
+    "Foot.R",
+    "LowerArm.L",
+    "UpperLeg.L",
+    "Neck"
+  ],
+  "vertices": 13772,
+  "faces": 12558,
+  "quads": 12252,
+  "triangles": 27100,
+  "height_m": 1.0,
+  "mirror_applied": true,
+  "actions": {
+    "Idle": [
+      0.0,
+      120.0
+    ],
+    "Wave": [
+      0.0,
+      90.0
+    ],
+    "HappyJump": [
+      0.0,
+      60.0
+    ],
+    "TailWag": [
+      0.0,
+      60.0
+    ],
+    "Listen": [
+      0.0,
+      90.0
+    ],
+    "Sleep": [
+      0.0,
+      120.0
+    ]
+  },
+  "after_repair": {
+    "unweighted": 0,
+    "not_normalized": 0,
+    "tail_foreign": 0,
+    "ear_foreign": 0,
+    "tail_vertices": 258,
+    "ear_vertices": 576,
+    "max_influences": 2
+  }
+}

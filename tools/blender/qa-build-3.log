@@ -1,0 +1,94 @@
+C:\CloudeRepo\NAVI\tools\blender\build_navi.py:32: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m=bpy.data.materials.new(name); m.use_nodes=True
+Warning: Bone Heat Weighting: failed to find solution for one or more bones
+NAVI WEIGHT REPORT {
+  "iteration": 3,
+  "blender": "5.2.2 LTS",
+  "auto_weights": "heat weights attempted; incomplete solution repaired anatomically",
+  "before_repair": {
+    "unweighted": 8142,
+    "tail_foreign": 0,
+    "ear_foreign": 0
+  },
+  "bones": [
+    "Tail.1",
+    "Chest",
+    "Hand.L",
+    "LowerArm.R",
+    "Ear.R.1",
+    "LowerLeg.L",
+    "UpperLeg.L",
+    "Tail.3",
+    "Hips",
+    "Ear.L.1",
+    "Neck",
+    "Tail.2",
+    "Foot.R",
+    "Foot.L",
+    "Tail.4",
+    "Shoulder.R",
+    "Shoulder.L",
+    "Spine",
+    "Head",
+    "Ear.R.2",
+    "Hand.R",
+    "LowerLeg.R",
+    "UpperLeg.R",
+    "UpperArm.R",
+    "UpperArm.L",
+    "Ear.L.2",
+    "LowerArm.L"
+  ],
+  "vertices": 8142,
+  "faces": 7342,
+  "quads": 7032,
+  "triangles": 15864,
+  "height_m": 1.0,
+  "mirror_applied": true,
+  "actions": {
+    "Idle": [
+      0.0,
+      120.0
+    ],
+    "Wave": [
+      0.0,
+      90.0
+    ],
+    "HappyJump": [
+      0.0,
+      60.0
+    ],
+    "TailWag": [
+      0.0,
+      60.0
+    ],
+    "Listen": [
+      0.0,
+      90.0
+    ],
+    "Sleep": [
+      0.0,
+      120.0
+    ]
+  },
+  "after_repair": {
+    "unweighted": 0,
+    "not_normalized": 0,
+    "tail_foreign": 0,
+    "ear_foreign": 0,
+    "tail_vertices": 264,
+    "ear_vertices": 744,
+    "max_influences": 2
+  }
+}
+C:\CloudeRepo\NAVI\tools\blender\build_navi.py:471: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world=bpy.data.worlds.new('Navi dark studio');scene.world.use_nodes=True
+00:50.015  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter3-front.png'
+00:54.140  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter3-side.png'
+00:58.093  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter3-back.png'
+01:03.968  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v1-iter3-threequarter.png'
+Info: Saved as "navi-v1-review.blend"
+NAVI BUILD COMPLETE
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

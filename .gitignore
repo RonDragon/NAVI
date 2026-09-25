@@ -1,0 +1,8 @@
+# intermediate Astra review renders (keep only finals)
+renders/*-iter*
+renders/h21-*
+assets/models/*-review.blend
+assets/models/hunyuan/
+tools/astra/*.log
+*.blend1
+__pycache__/

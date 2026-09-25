@@ -1,0 +1,52 @@
+00:02.641  blend            | Read blend: "C:\CloudeRepo\NAVI\assets\models\navi-v1.blend"
+NAVI FINAL VALIDATION {
+  "glb_bytes": 774428,
+  "triangles": 14872,
+  "mesh_count": 1,
+  "material_count": 8,
+  "animations": [
+    "Idle",
+    "Wave",
+    "HappyJump",
+    "TailWag",
+    "Listen",
+    "Sleep"
+  ],
+  "shape_keys": [
+    "Blink",
+    "Happy",
+    "MouthOpen"
+  ],
+  "height_m": 1.0,
+  "bones": 27,
+  "all_weights_normalized": true,
+  "tail_vertices": 264,
+  "ear_vertices": 744,
+  "tail_only_test_max_leg_motion_m": 0.0,
+  "tail_only_test_max_tail_motion_m": 0.13083965922291177,
+  "loop_endpoint_max_deltas": {
+    "Idle": 1.0124358171042812e-17,
+    "TailWag": 5.304700003879706e-17,
+    "Sleep": 0
+  },
+  "symmetry_unpaired_vertices": 0,
+  "embedded_images": 1,
+  "status": "PASS",
+  "topology": {
+    "nonmanifold_edges": 0,
+    "loose_vertices": 0,
+    "zero_area_faces": 0
+  },
+  "rest_clearance": {
+    "tail_body_intersections": 0,
+    "tail_body_min_distance_m": 0.009893974289298058,
+    "ear_torso_min_distance_m": 0.2021031677722931
+  }
+}
+16:02:48 | INFO: Data are loaded, start creating Blender stuff
+16:02:48 | INFO: Blender create Mesh node Navi_QuadSurface
+16:02:48 | INFO: glTF import finished in 0.16s
+GLB ROUND TRIP PASS
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit
