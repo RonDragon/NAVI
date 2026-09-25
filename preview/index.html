@@ -219,6 +219,7 @@ new GLTFLoader().load(MODEL, (gltf) => {
       for (const m of mats) if (m.name === 'Navi_Glow') glowMats.push(m);
     }
   });
+  window.__navi = { bones, actions: () => actions, react };   // debug handle
   mixer = new THREE.AnimationMixer(navi);
   for (const clip of gltf.animations) {
     const a = mixer.clipAction(clip);
@@ -338,7 +339,7 @@ else {
     ensureAudio();
     if (recOn) { rec.stop(); return; }
     recOn = true; micBtn.classList.add('rec'); msgInput.value = '';
-    play('Listen', 0.3, 'Idle'); say('אני מקשיב', { thinking: true });
+    react('heard', 1500); play('Listen', 0.3, 'Idle'); say('אני מקשיב', { thinking: true });
     try { rec.start(); } catch { stopRec(); }
   };
 }
@@ -382,15 +383,18 @@ chatForm.addEventListener('submit', async (e) => {
   if (!text || chatForm.classList.contains('busy')) return;
   msgInput.value = '';
   chatForm.classList.add('busy');
-  play('Listen', 0.3, 'Idle');                     // he listens while he thinks
+  // 0–400ms: instant creature reaction (ears, head, tail, face, chirp) — before any model call
+  react(quickRead(text), 900);
   glowTarget = 4;
-  say('', { thinking: true });
+  const thinkTimer = setTimeout(() => { thinkingPose(); say('', { thinking: true }); }, 700);
   try {
     const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: text }) });
     const out = await r.json();
     if (!r.ok) throw new Error(out.error || r.status);
+    clearTimeout(thinkTimer); releaseReflex();
     applyBrain(out);
   } catch (err) {
+    clearTimeout(thinkTimer); releaseReflex();
     console.error(err);
     play('Idle');
     say('משהו בחיבור שלי התנתק לרגע. תנסה שוב?');
@@ -438,24 +442,95 @@ renderer.domElement.addEventListener('click', (e) => {
 });
 
 const headQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
-let headAnim = null;   // head pose as set by the animation, before the look-at offset
 let look = new THREE.Vector2();
 const clock = new THREE.Clock();
+
+// ---------- reflex layer: instant body reactions on top of whatever clip is playing ----------
+// Bones we add procedural rotation to. glTF names lose their dots in three.js ("Ear.L.1" -> "EarL1").
+const OVERLAY = ['Head', 'EarL1', 'EarL2', 'EarR1', 'EarR2', 'Tail1', 'Tail2', 'Tail3', 'Tail4'];
+const baseQ = {};                         // pose written by the animation this frame, before our offsets
+const reflex = { perk: 0, tilt: 0, nod: 0, wagAmp: 0, wagSpeed: 6 };     // smoothed
+const reflexTarget = { perk: 0, tilt: 0, nod: 0, wagAmp: 0, wagSpeed: 6 };
+let reflexUntil = 0;
+const REFLEX = {
+  //            ears  head-tilt nod   tail amp/speed   face          chirp
+  heard:     { perk: .45, tilt: .10, nod: .05, wagAmp: .10, wagSpeed: 6,  face: {},              chirp: 'blip' },
+  curious:   { perk: .70, tilt: .32, nod: 0,   wagAmp: .12, wagSpeed: 5,  face: {},              chirp: 'hm' },
+  excited:   { perk: .95, tilt: 0,   nod: -.08, wagAmp: .55, wagSpeed: 14, face: { Happy: .9 },   chirp: 'yip' },
+  surprised: { perk: 1,   tilt: .05, nod: -.12, wagAmp: .05, wagSpeed: 4, face: { MouthOpen: .5 }, chirp: 'oh' },
+  concerned: { perk: -.6, tilt: .18, nod: .14, wagAmp: 0,   wagSpeed: 2,  face: {},              chirp: 'aw' },
+  greeting:  { perk: .8,  tilt: .12, nod: 0,   wagAmp: .35, wagSpeed: 10, face: { Happy: .6 },   chirp: 'yip' },
+};
+// Instant local read of the message — no model call. Just enough to react like a creature while the brain thinks.
+function quickRead(text) {
+  const t = text.trim();
+  if (/קיבלתי|הצלחתי|ניצחנו|ניצחתי|סוף סוף|יש!|וואו|מעולה|אדיר|מושלם|🎉|😍|🥳|!{2,}/.test(t)) return 'excited';
+  if (/עצוב|מבאס|באסה|רע לי|קשה לי|לחוץ|לחץ|פוחד|מפחד|חולה|כואב|נכשל|גרוע|נמאס|עייף|😢|😞|😔|💔/.test(t)) return 'concerned';
+  if (/לא תאמין|תשמע|דמיין|פתאום|מה\?!|באמת\?|😮|😲|🤯/.test(t)) return 'surprised';
+  if (/^(היי|הי|שלום|בוקר טוב|ערב טוב|לילה טוב|מה נשמע|מה קורה|אהלן)/.test(t)) return 'greeting';
+  if (/\?\s*$|^(למה|איך|מה|מתי|איפה|מי|תסביר|ספר לי)/.test(t)) return 'curious';
+  return 'heard';
+}
+function react(kind, holdMs = 2500) {
+  const r = REFLEX[kind] || REFLEX.heard;
+  Object.assign(reflexTarget, { perk: r.perk, tilt: r.tilt, nod: r.nod, wagAmp: r.wagAmp, wagSpeed: r.wagSpeed });
+  for (const f in r.face) faceTarget[f] = Math.max(faceTarget[f], r.face[f]);
+  reflexUntil = performance.now() + holdMs;
+  chirp(r.chirp);
+  document.getElementById('tState').textContent = 'reflex:' + kind;
+}
+// "thinking" hold while the brain works: ears half up, slow head sway
+function thinkingPose() { Object.assign(reflexTarget, { perk: .35, tilt: .15, nod: .04, wagAmp: .08, wagSpeed: 3 }); reflexUntil = Infinity; }
+function releaseReflex() { reflexUntil = 0; }
+
+// tiny synthesized creature sounds (no assets) — pitch contours per reaction
+function chirp(kind) {
+  if (!audioCtx || !voiceOn) return;
+  const shapes = {
+    blip: [[880, 1100, .07]],
+    hm:   [[520, 700, .12], [700, 980, .1]],
+    yip:  [[900, 1500, .07], [1100, 1800, .09]],
+    oh:   [[1200, 700, .16]],
+    aw:   [[620, 420, .22]],
+  }[kind] || [[880, 1100, .07]];
+  let t0 = audioCtx.currentTime;
+  for (const [f0, f1, d] of shapes) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine'; o.frequency.setValueAtTime(f0, t0); o.frequency.exponentialRampToValueAtTime(f1, t0 + d);
+    g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(0.12, t0 + 0.015); g.gain.exponentialRampToValueAtTime(0.0001, t0 + d);
+    o.connect(g).connect(audioCtx.destination); o.start(t0); o.stop(t0 + d + 0.02);
+    t0 += d + 0.03;
+  }
+}
+
+const qTmp = new THREE.Quaternion(), eTmp = new THREE.Euler();
+function addRot(bone, x, y, z) { if (!bone) return; eTmp.set(x, y, z, 'XYZ'); bone.quaternion.multiply(qTmp.setFromEuler(eTmp)); }
 
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
   controls.update();
-  // undo last frame's look-at offset, so it never accumulates on tracks the clip doesn't drive
-  if (bones['Head'] && headAnim) bones['Head'].quaternion.copy(headAnim);
+  // undo last frame's procedural offsets, so they never accumulate on tracks the clip doesn't drive
+  for (const n of OVERLAY) if (bones[n] && baseQ[n]) bones[n].quaternion.copy(baseQ[n]);
   if (mixer) mixer.update(dt);
-  if (bones['Head']) headAnim = (headAnim || new THREE.Quaternion()).copy(bones['Head'].quaternion);
+  for (const n of OVERLAY) if (bones[n]) (baseQ[n] ||= new THREE.Quaternion()).copy(bones[n].quaternion);
 
   if (navi) {
-    // head follows the pointer (added on top of the animation)
+    // reflexes: fast attack (~150ms), slow release back to neutral
+    if (performance.now() > reflexUntil) Object.assign(reflexTarget, { perk: 0, tilt: 0, nod: 0, wagAmp: 0, wagSpeed: 6 });
+    const k = 1 - Math.pow(reflexUntil > performance.now() ? 1e-6 : 0.02, dt);
+    for (const key in reflex) reflex[key] += (reflexTarget[key] - reflex[key]) * k;
+    const ear = reflex.perk * 0.35;
+    // ear bone local X tilts the ear sideways: + = upright/perked, − = splayed/droopy (verified visually)
+    addRot(bones['EarL1'], ear, 0, 0); addRot(bones['EarR1'], ear, 0, 0);
+    addRot(bones['EarL2'], ear * 0.6, 0, 0); addRot(bones['EarR2'], ear * 0.6, 0, 0);
+    const wag = Math.sin(t * reflex.wagSpeed) * reflex.wagAmp;
+    ['Tail1', 'Tail2', 'Tail3', 'Tail4'].forEach((n, i) => addRot(bones[n], 0, 0, wag * (0.5 + i * 0.25)));
+
+    // head: pointer look-at + reflex tilt/nod (added on top of the animation)
     look.lerp(pointer, 1 - Math.pow(0.001, dt));
     const head = bones['Head'];
     if (head && lookWeight > 0) {
-      tmpE.set(-look.y * 0.22 * lookWeight, look.x * 0.45 * lookWeight, 0, 'YXZ');
+      tmpE.set(-look.y * 0.22 * lookWeight + reflex.nod, look.x * 0.45 * lookWeight, reflex.tilt, 'YXZ');
       headQ.setFromEuler(tmpE);
       head.quaternion.multiply(headQ);
     }
