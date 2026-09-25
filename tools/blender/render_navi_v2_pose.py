@@ -26,5 +26,7 @@ for name in names:
     bpy.context.view_layer.update()
     local=[cam.matrix_world.inverted()@v for v in coords]
     cam.data.ortho_scale=max(max(v[k] for v in local)-min(v[k] for v in local) for k in [0,1])*1.15
+    shift=cam.matrix_world.to_3x3()@Vector(tuple((max(v[k] for v in local)+min(v[k] for v in local))/2 for k in [0,1])+(0,))
+    cam.location+=shift
     scene.render.filepath=str(ROOT/'renders'/('navi-v2-'+name.lower()+'.png'))
     bpy.ops.render.render(write_still=True)

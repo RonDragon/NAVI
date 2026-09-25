@@ -1,0 +1,164 @@
+{
+  "glb_bytes": 1166496,
+  "triangles": 17736,
+  "mesh_count": 1,
+  "material_count": 8,
+  "animations": [
+    "Idle",
+    "Wave",
+    "HappyJump",
+    "TailWag",
+    "Listen",
+    "Sleep",
+    "Notice",
+    "Stretch",
+    "Inspect",
+    "Celebrate",
+    "Concerned"
+  ],
+  "shape_keys": [
+    "Blink",
+    "Happy",
+    "MouthOpen",
+    "Sad",
+    "Surprised"
+  ],
+  "height_m": 1.0,
+  "bones": 27,
+  "all_weights_normalized": true,
+  "tail_vertices": 528,
+  "ear_vertices": 744,
+  "tail_only_test_max_leg_motion_m": 0.0,
+  "tail_only_test_max_tail_motion_m": 0.12613993039548888,
+  "loop_endpoint_max_deltas": {
+    "Idle": 1.0124358171042812e-17,
+    "TailWag": 5.304700003879706e-17,
+    "Sleep": 0,
+    "Inspect": 1.4724175554190966e-17,
+    "Concerned": 7.950387727729934e-18
+  },
+  "symmetry_unpaired_vertices": 0,
+  "embedded_images": 1,
+  "status": "PASS",
+  "topology": {
+    "nonmanifold_edges": 0,
+    "loose_vertices": 0,
+    "zero_area_faces": 0
+  },
+  "animation_durations_s": {
+    "Idle": 4.0,
+    "Wave": 3.0,
+    "HappyJump": 2.0,
+    "TailWag": 2.0,
+    "Listen": 3.0,
+    "Sleep": 4.0,
+    "Notice": 2.0,
+    "Stretch": 3.0,
+    "Inspect": 4.0,
+    "Celebrate": 2.5,
+    "Concerned": 3.0
+  },
+  "v1_comparison": {
+    "v1": {
+      "eye_projected_area_m2": 0.011910456230716127,
+      "hand_extents_m": [
+        0.12301066517829895,
+        0.10409237444400787,
+        0.09479597210884094
+      ]
+    },
+    "v2": {
+      "eye_projected_area_m2": 0.010719405015189531,
+      "hand_extents_m": [
+        0.13777196407318115,
+        0.11658346652984619,
+        0.10617142915725708
+      ]
+    },
+    "eye_area_ratio": 0.8999995304583742,
+    "hand_extent_ratios": [
+      1.1200001550555498,
+      1.1200000687135576,
+      1.119999371232306
+    ],
+    "max_bone_bind_delta_m": 0.0
+  },
+  "blink_eye_motion_m": 0.0,
+  "blink_lid_motion_m": 0.07118762467228099,
+  "poses": {
+    "Idle": {
+      "height_min_m": 0.9936048443991607,
+      "height_max_m": 1.0155926998335785,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": -5.551046733387466e-09
+    },
+    "Wave": {
+      "height_min_m": 1.0000001247603363,
+      "height_max_m": 1.021511083431906,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": -5.551046733387466e-09
+    },
+    "HappyJump": {
+      "height_min_m": 1.0000000558793545,
+      "height_max_m": 1.0000001247603363,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": 0.1555866003036499
+    },
+    "TailWag": {
+      "height_min_m": 1.0000001247603363,
+      "height_max_m": 1.0000001247603363,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": -5.551046733387466e-09
+    },
+    "Listen": {
+      "height_min_m": 1.0000001247603363,
+      "height_max_m": 1.045126682110495,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": -5.551046733387466e-09
+    },
+    "Sleep": {
+      "height_min_m": 0.6624075062572956,
+      "height_max_m": 0.664455521851778,
+      "floor_min_m": 1.1175870895385742e-08,
+      "floor_max_m": 1.1175870895385742e-08
+    },
+    "Notice": {
+      "height_min_m": 0.9780250247199005,
+      "height_max_m": 1.062165861912436,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": -4.656612873077393e-10
+    },
+    "Stretch": {
+      "height_min_m": 0.9425388630110687,
+      "height_max_m": 1.0000001247603363,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": -5.551046733387466e-09
+    },
+    "Inspect": {
+      "height_min_m": 0.7763860262930393,
+      "height_max_m": 0.8128894604742527,
+      "floor_min_m": -3.725290298461914e-09,
+      "floor_max_m": -3.725290298461914e-09
+    },
+    "Celebrate": {
+      "height_min_m": 0.9935973286628723,
+      "height_max_m": 1.0288303419947624,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": 0.1898922324180603
+    },
+    "Concerned": {
+      "height_min_m": 0.8851607497412628,
+      "height_max_m": 0.9141843970496124,
+      "floor_min_m": -5.551046733387466e-09,
+      "floor_max_m": -5.551046733387466e-09
+    }
+  },
+  "stretch_tail_tip_lift_m": 0.1619488043957446,
+  "rest_clearance": {
+    "tail_body_intersections": 0,
+    "tail_body_min_distance_m": 0.008696533739566803,
+    "ear_torso_min_distance_m": 0.2021031677722931
+  },
+  "round_trip_height_m": 0.9999999914665807,
+  "round_trip_import": "PASS"
+}

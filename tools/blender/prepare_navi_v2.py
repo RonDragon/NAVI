@@ -2,11 +2,14 @@
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2]
 s=(ROOT/'tools/blender/build_navi.py').read_text()
+s=s.replace('tools/blender/build_navi.py','tools/blender/build_navi_v2.py')
+s=s.replace('# Save authored anatomical constraints, then run Blender automatic heat weights.','# Save authored anatomical constraints and apply deterministic skin weights.')
 s=s.replace('navi-v1','navi-v2').replace("default=5)","default=2)",1)
 s=s.replace('IT = A.iteration','PASS = A.iteration\nIT = 5')
 s=s.replace("'Navi_QuadSurface'","'Navi_SoftSurface'")
 s=s.replace("f'tools/blender/qa/iteration-{IT}.json'","f'tools/blender/qa/v2-iteration-{PASS}.json'")
 s=s.replace("'iteration':IT","'iteration':PASS")
+s=s.replace("obj['build_iteration']=IT","obj['build_iteration']=PASS")
 s=s.replace('str(IT))','str(PASS))')
 s=s.replace("# Cheeks and muzzle: masks taper toward the central brow.","# Cheeks and muzzle: masks taper toward the central brow.")
 start=s.index('# Cheeks and muzzle:')

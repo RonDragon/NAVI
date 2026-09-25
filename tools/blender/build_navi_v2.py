@@ -1,6 +1,6 @@
 """Reproducible, offline Navi character build. Blender 5.2, no dependencies.
 
-blender --background --python tools/blender/build_navi.py -- --iteration 5 --final
+blender --background --python tools/blender/build_navi_v2.py -- --iteration 5 --final
 Iterations retain their own turnaround renders. Use --final to export and render poses.
 """
 import bpy, bmesh, math, sys, json, argparse
@@ -207,7 +207,7 @@ for s,suf in [(1,'L'),(-1,'R')]:
             for j in range(4):
                 u=j/3;row=[]
                 for i in range(25):
-                    a=pi*i/24;dx=rx*cos(a)
+                    a=pi*i/24;dx=rx*cos(a)*(1.025-.025*u)
                     zz=z+side*rz*sin(a)*(1.12-.16*u)
                     yy=-.137-.028*u*sin(a)+( .0012 if backface else 0)
                     row.append(g.vertex((x+dx,yy,zz),W('Head'),('LidTop' if side==1 else 'LidBottom','LidRow'+str(j),'LidBack' if backface else 'LidFront')))
@@ -425,7 +425,7 @@ if IT>=4:tpoints=[(x,y+.006,z) for x,y,z in tpoints]
 for i in range(4):bone('Tail.'+str(i+1),tpoints[i],tpoints[i+1],'Hips' if i==0 else 'Tail.'+str(i),i>0)
 bpy.ops.object.mode_set(mode='OBJECT');rig.show_in_front=True;arm.display_type='OCTAHEDRAL'
 
-# Save authored anatomical constraints, then run Blender automatic heat weights.
+# Save authored anatomical constraints and apply deterministic skin weights.
 planned=[];semantic=[]
 for v in mesh.vertices:
     def side_name(name):
@@ -572,7 +572,7 @@ for name,length,step in CLIPS:
             e=ease(t/.28)*ease((1-t)/.25)
             for sign,suf in [(1,'L'),(-1,'R')]:rot('UpperArm.'+suf,(-62+132*e,0,0));rot('LowerArm.'+suf,(-8+20*e,0,0));rot('Hand.'+suf,(0,0,sign*12*e))
             rot('Chest',(-12*e,0,0));rot('Head',(-13*e,0,0))
-            for i in range(1,5):rot('Tail.'+str(i),(-14*e,0,4*e))
+            for i in range(1,5):rot('Tail.'+str(i),(14*e,0,4*e))
         elif name=='Inspect':
             squat(.82);rot('Spine',(20,0,0));rot('Chest',(9,0,0));rot('Head',(28,0,12+5*p))
             rot('UpperArm.L',(-78,-18,0));rot('LowerArm.L',(-26,0,0));rot('UpperArm.R',(-78,18,0));rot('LowerArm.R',(-26,0,0))
@@ -684,7 +684,7 @@ else:
 rig.animation_data.action=None;sk.animation_data.action=None;clear_pose();scene.frame_set(0)
 for k in keys:k.value=0
 bpy.context.view_layer.update()
-obj['build_iteration']=IT;obj['symmetry']='X mirror applied before rigging';obj['front']='-Y';obj['height_m']=1.0
+obj['build_iteration']=PASS;obj['symmetry']='X mirror applied before rigging';obj['front']='-Y';obj['height_m']=1.0
 rig['loop_actions']='Idle, TailWag, Sleep, Inspect, Concerned';rig['authored_fps']=30
 bpy.ops.object.select_all(action='DESELECT');obj.select_set(True);rig.select_set(True);bpy.context.view_layer.objects.active=rig
 scene.frame_start=0;scene.frame_end=120

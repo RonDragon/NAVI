@@ -1,0 +1,136 @@
+C:\CloudeRepo\NAVI\tools\blender\build_navi_v2.py:33: DeprecationWarning: 'Material.use_nodes' is expected to be removed in Blender 6.0
+  m=bpy.data.materials.new(name); m.use_nodes=True
+NAVI WEIGHT REPORT {
+  "iteration": 6,
+  "blender": "5.2.2 LTS",
+  "auto_weights": "deterministic anatomical weights (v1 repair preserved)",
+  "before_repair": {
+    "unweighted": 9070,
+    "tail_foreign": 0,
+    "ear_foreign": 0
+  },
+  "bones": [
+    "LowerLeg.R",
+    "Chest",
+    "Foot.R",
+    "Ear.L.2",
+    "Ear.R.2",
+    "LowerLeg.L",
+    "Spine",
+    "Ear.R.1",
+    "Shoulder.L",
+    "UpperArm.L",
+    "Foot.L",
+    "Tail.1",
+    "Head",
+    "LowerArm.L",
+    "LowerArm.R",
+    "Neck",
+    "UpperArm.R",
+    "UpperLeg.R",
+    "Hand.R",
+    "Hips",
+    "Tail.4",
+    "Hand.L",
+    "Shoulder.R",
+    "Tail.2",
+    "Ear.L.1",
+    "UpperLeg.L",
+    "Tail.3"
+  ],
+  "vertices": 9070,
+  "faces": 8262,
+  "quads": 8036,
+  "triangles": 17736,
+  "height_m": 1.0,
+  "mirror_applied": true,
+  "actions": {
+    "Idle": [
+      0.0,
+      120.0
+    ],
+    "Wave": [
+      0.0,
+      90.0
+    ],
+    "HappyJump": [
+      0.0,
+      60.0
+    ],
+    "TailWag": [
+      0.0,
+      60.0
+    ],
+    "Listen": [
+      0.0,
+      90.0
+    ],
+    "Sleep": [
+      0.0,
+      120.0
+    ],
+    "Notice": [
+      0.0,
+      60.0
+    ],
+    "Stretch": [
+      0.0,
+      90.0
+    ],
+    "Inspect": [
+      0.0,
+      120.0
+    ],
+    "Celebrate": [
+      0.0,
+      75.0
+    ],
+    "Concerned": [
+      0.0,
+      90.0
+    ]
+  },
+  "after_repair": {
+    "unweighted": 0,
+    "not_normalized": 0,
+    "tail_foreign": 0,
+    "ear_foreign": 0,
+    "tail_vertices": 528,
+    "ear_vertices": 744,
+    "max_influences": 4
+  }
+}
+C:\CloudeRepo\NAVI\tools\blender\build_navi_v2.py:643: DeprecationWarning: 'World.use_nodes' is expected to be removed in Blender 6.0
+  scene.world=bpy.data.worlds.new('Navi dark studio');scene.world.use_nodes=True
+00:33.906  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-front.png'
+00:36.984  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-side.png'
+00:39.953  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-back.png'
+00:43.156  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-threequarter.png'
+00:46.625  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-sleep.png'
+00:49.438  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-notice.png'
+00:52.531  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-stretch.png'
+00:55.641  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-inspect.png'
+00:58.609  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-celebrate.png'
+01:01.859  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-concerned.png'
+01:05.188  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-wave.png'
+01:08.219  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-happyjump.png'
+01:11.125  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-tailwag.png'
+01:14.219  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-listen.png'
+01:16.641  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-idle.png'
+01:19.672  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-blink.png'
+01:22.344  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-happy.png'
+01:25.359  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-mouthopen.png'
+01:28.563  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-surprised.png'
+01:32.016  render           | Saved: 'C:\CloudeRepo\NAVI\renders\navi-v2-sad.png'
+INFO Draco is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_draco_bridge.dll
+INFO MeshOptimizer is available, use library at C:\Program Files\Blender Foundation\Blender 5.2\5.2\scripts\addons_core\io_scene_gltf2\bf_intern_meshopt_bridge.dll
+18:44:49 | INFO: Starting glTF 2.0 export
+18:44:49 | INFO: Extracting primitive: Navi_SoftSurface
+18:44:49 | INFO: Primitives created: 8
+18:44:53 | INFO: Finished glTF 2.0 export in 3.740166187286377 s
+
+Info: Saved as "navi-v2.blend"
+NAVI BUILD COMPLETE
+Blender 5.2.2 LTS (hash d13f752e3b9c built 2026-09-15 01:37:04)
+
+Blender quit

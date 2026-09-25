@@ -51,8 +51,37 @@ for a in g['animations']:
     loop_checks[a['name']]=max_delta
     assert max_delta<1e-5,(a['name'],max_delta)
 
+def hull_area(points):
+    pts=sorted(set(points))
+    def cross(o,a,b):return (a[0]-o[0])*(b[1]-o[1])-(a[1]-o[1])*(b[0]-o[0])
+    lower=[];upper=[]
+    for p in pts:
+        while len(lower)>1 and cross(lower[-2],lower[-1],p)<=0:lower.pop()
+        lower.append(p)
+    for p in reversed(pts):
+        while len(upper)>1 and cross(upper[-2],upper[-1],p)<=0:upper.pop()
+        upper.append(p)
+    hull=lower[:-1]+upper[:-1]
+    return abs(sum(a[0]*b[1]-a[1]*b[0] for a,b in zip(hull,hull[1:]+hull[:1])))/2
+def measurements(o):
+    eyes=[];hands=[]
+    for v in o.data.vertices:
+        wg={o.vertex_groups[e.group].name:e.weight for e in v.groups}
+        if 'S_Eye' in wg and v.co.x>0:eyes.append((v.co.x,v.co.z))
+        if wg.get('Hand.L',0)>.99999:hands.append(v.co.copy())
+    return {'eye_projected_area_m2':hull_area(eyes),'hand_extents_m':[max(v[k] for v in hands)-min(v[k] for v in hands) for k in range(3)]}
+bpy.ops.wm.open_mainfile(filepath=str(ROOT/'assets/models/navi-v1.blend'))
+v1_measurements=measurements(bpy.data.objects['Navi'])
+v1_bind={b.name:list(b.head_local)+list(b.tail_local) for b in bpy.data.objects['NaviRig'].data.bones}
 bpy.ops.wm.open_mainfile(filepath=str(ROOT/'assets/models/navi-v2.blend'))
 obj=bpy.data.objects['Navi'];rig=bpy.data.objects['NaviRig']
+v2_measurements=measurements(obj)
+eye_area_ratio=v2_measurements['eye_projected_area_m2']/v1_measurements['eye_projected_area_m2']
+hand_ratios=[b/a for a,b in zip(v1_measurements['hand_extents_m'],v2_measurements['hand_extents_m'])]
+assert .88<=eye_area_ratio<=.92,eye_area_ratio
+assert all(1.10<=r<=1.15 for r in hand_ratios),hand_ratios
+bind_delta=max(abs(a-b) for bone in rig.data.bones for a,b in zip(v1_bind[bone.name],list(bone.head_local)+list(bone.tail_local)))
+assert bind_delta<1e-7,bind_delta
 assert len(rig.data.bones)==27
 assert set(k.name for k in obj.data.shape_keys.key_blocks)=={'Basis','Blink','Happy','MouthOpen','Surprised','Sad'}
 assert not any(m.type=='MIRROR' for m in obj.modifiers)
@@ -118,6 +147,8 @@ assert blink_eye_motion==0 and blink_lid_motion>.04
 expected_bones={'Hips','Spine','Chest','Neck','Head'}|{f'{p}.{s}' for p in ['Shoulder','UpperArm','LowerArm','Hand','UpperLeg','LowerLeg','Foot'] for s in ['L','R']}|{f'Tail.{i}' for i in range(1,5)}|{f'Ear.{s}.{i}' for s in ['L','R'] for i in [1,2]}
 assert set(rig.data.bones.keys())==expected_bones
 pose_measurements={}
+tip_ids=[i for i in tail_ids if vertices[i].co.y>.47]
+tail_tip_rest=sum(vertices[i].co.z for i in tip_ids)/len(tip_ids)
 for name in names:
     rig.animation_data.action=bpy.data.actions[name]
     obj.data.shape_keys.animation_data.action=bpy.data.actions[name+'_Face']
@@ -125,9 +156,11 @@ for name in names:
     heights=[];floors=[]
     for frame in [0,length//4,length//2,3*length//4,length]:
         scene.frame_set(frame);vv=evaluated();zz=[v.z for v in vv]
+        if name=='Stretch' and frame==length//2:tail_tip_stretch=sum(vv[i].z for i in tip_ids)/len(tip_ids)
         floors.append(min(zz));heights.append(max(zz)-min(zz))
     pose_measurements[name]={'height_min_m':min(heights),'height_max_m':max(heights),'floor_min_m':min(floors),'floor_max_m':max(floors)}
 assert pose_measurements['Sleep']['height_max_m']<.78,pose_measurements['Sleep']
+assert tail_tip_stretch>tail_tip_rest+.10,(tail_tip_rest,tail_tip_stretch)
 for name in ['Sleep','Inspect','Concerned','Stretch','Notice']:
     assert pose_measurements[name]['floor_min_m']>-.002,(name,pose_measurements[name])
 rig.animation_data.action=None;obj.data.shape_keys.animation_data.action=None
@@ -141,7 +174,9 @@ assert unpaired==0,unpaired
 result={'glb_bytes':len(raw),'triangles':triangles,'mesh_count':len(g['meshes']),'material_count':len(g['materials']),'animations':names,'shape_keys':sorted(targets),'height_m':height,'bones':len(rig.data.bones),'all_weights_normalized':True,'tail_vertices':len(tail_ids),'ear_vertices':len(ear_ids),'tail_only_test_max_leg_motion_m':leg_motion,'tail_only_test_max_tail_motion_m':tail_motion,'loop_endpoint_max_deltas':loop_checks,'symmetry_unpaired_vertices':unpaired,'embedded_images':len(g.get('images',[])),'status':'PASS'}
 result['topology']=topology
 result['animation_durations_s']=durations
+result['v1_comparison']={'v1':v1_measurements,'v2':v2_measurements,'eye_area_ratio':eye_area_ratio,'hand_extent_ratios':hand_ratios,'max_bone_bind_delta_m':bind_delta}
 result['blink_eye_motion_m']=blink_eye_motion;result['blink_lid_motion_m']=blink_lid_motion;result['poses']=pose_measurements
+result['stretch_tail_tip_lift_m']=tail_tip_stretch-tail_tip_rest
 result['rest_clearance']={'tail_body_intersections':tail_body_intersections,'tail_body_min_distance_m':tail_clearance,'ear_torso_min_distance_m':ear_clearance}
 (ROOT/'tools/blender/qa/v2-final-validation.json').write_text(json.dumps(result,indent=2))
 print('NAVI FINAL VALIDATION',json.dumps(result,indent=2),flush=True)

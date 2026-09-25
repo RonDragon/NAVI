@@ -63,7 +63,7 @@ for name,length,step in CLIPS:
             e=ease(t/.28)*ease((1-t)/.25)
             for sign,suf in [(1,'L'),(-1,'R')]:rot('UpperArm.'+suf,(-62+132*e,0,0));rot('LowerArm.'+suf,(-8+20*e,0,0));rot('Hand.'+suf,(0,0,sign*12*e))
             rot('Chest',(-12*e,0,0));rot('Head',(-13*e,0,0))
-            for i in range(1,5):rot('Tail.'+str(i),(-14*e,0,4*e))
+            for i in range(1,5):rot('Tail.'+str(i),(14*e,0,4*e))
         elif name=='Inspect':
             squat(.82);rot('Spine',(20,0,0));rot('Chest',(9,0,0));rot('Head',(28,0,12+5*p))
             rot('UpperArm.L',(-78,-18,0));rot('LowerArm.L',(-26,0,0));rot('UpperArm.R',(-78,18,0));rot('LowerArm.R',(-26,0,0))
