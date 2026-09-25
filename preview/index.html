@@ -68,6 +68,10 @@ canvas{display:block}
 .chat .send{background:linear-gradient(135deg,#18e0e8,#1b7fd6);color:#021018;border:none;box-shadow:0 0 18px #18e0e866}
 .chat.busy .send{opacity:.4;pointer-events:none}
 .tog.on{color:var(--cyan);border-color:var(--cyan)}
+.voice:not(.on){opacity:.45}
+.mic.rec{background:#ff5268;border-color:#ff5268;box-shadow:0 0 22px #ff526888;animation:recp 1s ease-in-out infinite}
+@keyframes recp{50%{box-shadow:0 0 6px #ff526844}}
+@media (max-width:420px){.chat button{width:40px;height:40px;font-size:15px}.chat{gap:6px}}
 .bubble.thinking #say::after{content:'';display:inline-block;width:1.2em;text-align:left;animation:dots 1s steps(4) infinite}
 @keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 #loading{position:fixed;inset:0;display:grid;place-items:center;font:500 13px 'IBM Plex Mono';color:var(--muted);z-index:4;direction:ltr}
@@ -96,7 +100,9 @@ canvas{display:block}
   </div>
   <form class="chat" id="chat" autocomplete="off">
     <button type="button" class="tog" id="tog" title="שליטה ידנית">⚙</button>
+    <button type="button" class="voice on" id="voice" title="קול">🔊</button>
     <input id="msg" placeholder="דבר עם פיקסל..." maxlength="500">
+    <button type="button" class="mic" id="mic" title="דבר">🎙</button>
     <button class="send" id="send" title="שלח">➤</button>
   </form>
 </div>
@@ -273,8 +279,74 @@ document.getElementById('tog').onclick = (e) => {
   document.getElementById('manual').classList.toggle('open');
   e.currentTarget.classList.toggle('on');
 };
+// ---------- voice out: edge-tts audio + amplitude-driven lip sync ----------
+let audioCtx, analyser, lipLevel = 0, voiceOn = true, currentSrc;
+const ampBuf = new Uint8Array(1024);
+function ensureAudio() {
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioCtx.createAnalyser(); analyser.fftSize = 1024;
+    analyser.connect(audioCtx.destination);
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+document.getElementById('voice').onclick = (e) => {
+  voiceOn = !voiceOn; e.currentTarget.classList.toggle('on', voiceOn);
+  e.currentTarget.textContent = voiceOn ? '🔊' : '🔇';
+  if (!voiceOn && currentSrc) currentSrc.stop();
+};
+async function speakOut(text) {
+  if (!voiceOn || !audioCtx) return;
+  try {
+    const r = await fetch('/api/tts', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) });
+    if (!r.ok) throw new Error('tts ' + r.status);
+    const buf = await audioCtx.decodeAudioData(await r.arrayBuffer());
+    if (currentSrc) currentSrc.stop();
+    const src = audioCtx.createBufferSource();
+    src.buffer = buf; src.connect(analyser); src.start();
+    currentSrc = src;
+    src.onended = () => { if (currentSrc === src) currentSrc = null; };
+  } catch (err) { console.warn('[voice]', err); }
+}
+function lipSync(dt) {
+  let target = 0;
+  if (analyser && currentSrc) {
+    analyser.getByteTimeDomainData(ampBuf);
+    let sum = 0;
+    for (let i = 0; i < ampBuf.length; i++) { const v = (ampBuf[i] - 128) / 128; sum += v * v; }
+    target = Math.min(1, Math.sqrt(sum / ampBuf.length) * 6);
+  }
+  lipLevel += (target - lipLevel) * (1 - Math.pow(0.0005, dt));
+  return lipLevel;
+}
+
+// ---------- voice in: browser speech recognition (Hebrew) ----------
+const micBtn = document.getElementById('mic');
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec, recOn = false;
+if (!SR) { micBtn.style.display = 'none'; }
+else {
+  rec = new SR(); rec.lang = 'he-IL'; rec.interimResults = true; rec.continuous = false;
+  rec.onresult = (e) => {
+    let txt = ''; for (const r of e.results) txt += r[0].transcript;
+    msgInput.value = txt;
+    if (e.results[e.results.length - 1].isFinal) { stopRec(); chatForm.requestSubmit(); }
+  };
+  rec.onerror = (e) => { console.warn('[mic]', e.error); stopRec(); if (e.error === 'not-allowed') say('אין לי גישה למיקרופון. צריך לאשר אותו בדפדפן.'); };
+  rec.onend = () => stopRec();
+  micBtn.onclick = () => {
+    ensureAudio();
+    if (recOn) { rec.stop(); return; }
+    recOn = true; micBtn.classList.add('rec'); msgInput.value = '';
+    play('Listen', 0.3, 'Idle'); say('אני מקשיב', { thinking: true });
+    try { rec.start(); } catch { stopRec(); }
+  };
+}
+function stopRec() { recOn = false; micBtn.classList.remove('rec'); }
+
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
+  ensureAudio();                                   // unlock audio on a user gesture
   const text = msgInput.value.trim();
   if (!text || chatForm.classList.contains('busy')) return;
   msgInput.value = '';
@@ -288,12 +360,13 @@ chatForm.addEventListener('submit', async (e) => {
     if (!r.ok) throw new Error(out.error || r.status);
     const m = MOODS[out.mood] || MOODS.calm;
     glowTarget = m.glow;
-    faceTarget.Happy = out.face.happy; faceTarget.MouthOpen = out.face.mouthOpen * 0.6;
+    faceTarget.Happy = out.face.happy; faceTarget.MouthOpen = voiceOn ? 0 : out.face.mouthOpen * 0.6;   // with voice, lip sync drives the mouth
     setTimeout(() => { faceTarget.MouthOpen = 0; }, Math.min(4000, out.reply.length * 60));
     const loopy = ['Idle', 'TailWag', 'Sleep'].includes(out.animation);
     play(out.animation, 0.35, loopy ? undefined : (out.mood === 'playful' ? 'TailWag' : 'Idle'));
     document.getElementById('tMood').textContent = out.mood;
     say(out.reply);
+    speakOut(out.reply);
     console.log(`[brain] ${out.provider} ${out.ms}ms`, out);
   } catch (err) {
     console.error(err);
@@ -375,7 +448,7 @@ function tick() {
       const inf = faceMesh.morphTargetInfluences;
       inf[morph.Blink] = Math.max(inf[morph.Blink], blink, face.Blink);
       inf[morph.Happy] = Math.max(inf[morph.Happy], face.Happy);
-      inf[morph.MouthOpen] = Math.max(inf[morph.MouthOpen], face.MouthOpen);
+      inf[morph.MouthOpen] = Math.max(inf[morph.MouthOpen], face.MouthOpen, lipSync(dt) * 0.9);
     }
 
     // glow breathes with mood

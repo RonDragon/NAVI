@@ -143,6 +143,42 @@ async function think(userText) {
   return out;
 }
 
+// ---------- voice (edge-tts: free Microsoft neural Hebrew voices, no key) ----------
+const VOICE = {
+  name: process.env.NAVI_VOICE || "he-IL-AvriNeural",
+  pitch: process.env.NAVI_VOICE_PITCH || "+35Hz",   // a little higher = smaller creature
+  rate: process.env.NAVI_VOICE_RATE || "+8%",
+};
+
+function speak(text) {
+  // emojis and symbols are read aloud badly — strip them
+  const clean = text.replace(/[\p{Extended_Pictographic}‍️]/gu, "").replace(/\s+/g, " ").trim().slice(0, 600);
+  if (!clean) return Promise.reject(new Error("empty text"));
+  const out = path.join(os.tmpdir(), `navi-tts-${Date.now()}-${Math.random().toString(36).slice(2)}.mp3`);
+  const txt = out.replace(/\.mp3$/, ".txt");
+  fs.writeFileSync(txt, clean, "utf8");             // via file: no shell quoting issues with Hebrew
+  return new Promise((resolve, reject) => {
+    const child = spawn("python", ["-m", "edge_tts", "--voice", VOICE.name, `--pitch=${VOICE.pitch}`, `--rate=${VOICE.rate}`,
+      "--file", txt, "--write-media", out]);
+    let err = "";
+    child.stderr.on("data", (d) => (err += d));
+    const timer = setTimeout(() => { child.kill(); reject(new Error("tts timeout")); }, 30_000);
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      try {
+        const audio = fs.readFileSync(out);
+        if (process.env.NAVI_DEBUG) console.log("[tts] exit", code, "bytes", audio.length, err.slice(-200));
+        if (!audio.length) throw new Error("empty audio");
+        resolve(audio);
+      } catch {
+        reject(new Error(`tts failed (exit ${code}): ${err.slice(-300)}`));
+      } finally {
+        fs.rmSync(out, { force: true }); fs.rmSync(txt, { force: true });
+      }
+    });
+  });
+}
+
 // ---------- http ----------
 const TYPES = { ".html": "text/html; charset=utf-8", ".js": "text/javascript", ".mjs": "text/javascript", ".json": "application/json",
   ".glb": "model/gltf-binary", ".png": "image/png", ".css": "text/css", ".md": "text/markdown; charset=utf-8" };
@@ -161,6 +197,21 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(out));
     } catch (e) {
       console.error("[chat]", e.message);
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/tts" && req.method === "POST") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    try {
+      const { text } = JSON.parse(body || "{}");
+      const audio = await speak(String(text || ""));
+      res.writeHead(200, { "content-type": "audio/mpeg", "cache-control": "no-store" });
+      res.end(audio);
+    } catch (e) {
+      console.error("[tts]", e.message);
       res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: e.message }));
     }
