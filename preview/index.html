@@ -233,7 +233,7 @@ new GLTFLoader().load(MODEL, (gltf) => {
   play('Idle', 0);
   document.getElementById('loading').remove();
   document.body.classList.add('play');           // Link Up intro
-  setTimeout(() => setMood('greet'), 900);
+  setTimeout(openingLine, 900);
 }, undefined, (err) => {
   document.getElementById('loading').textContent = 'FAILED TO LOAD MODEL — serve this folder over http';
   console.error(err);
@@ -344,6 +344,37 @@ else {
 }
 function stopRec() { recOn = false; micBtn.classList.remove('rec'); }
 
+// one brain reply -> body, face, bubble, voice
+function applyBrain(out) {
+  const m = MOODS[out.mood] || MOODS.calm;
+  glowTarget = m.glow;
+  faceTarget.Happy = out.face.happy; faceTarget.MouthOpen = voiceOn ? 0 : out.face.mouthOpen * 0.6;   // with voice, lip sync drives the mouth
+  setTimeout(() => { faceTarget.MouthOpen = 0; faceTarget.Happy = 0; }, Math.min(6000, 1500 + out.reply.length * 60));
+  const loopy = ['Idle', 'TailWag', 'Sleep'].includes(out.animation);
+  play(out.animation, 0.35, loopy ? undefined : (out.mood === 'playful' ? 'TailWag' : 'Idle'));
+  document.getElementById('tMood').textContent = out.mood;
+  say(out.reply);
+  if (audioCtx) speakOut(out.reply); else pendingSpeech = out.reply;   // browsers block audio until the first gesture
+  if (out.followUp) console.log('[followup] tracking:', out.followUp);
+  console.log(`[brain] ${out.provider} ${out.ms}ms`, out);
+}
+
+// Initiative: when the app opens, Pixel may speak first (follow-ups, time away, first meeting) — or stay quiet.
+let pendingSpeech = null;
+addEventListener('pointerdown', () => {
+  ensureAudio();
+  if (pendingSpeech) { const t = pendingSpeech; pendingSpeech = null; speakOut(t); }
+}, { once: false });
+async function openingLine() {
+  try {
+    const r = await fetch('/api/greeting', { method: 'POST' });
+    const out = await r.json();
+    if (!r.ok) throw new Error(out.error || r.status);
+    if (out.silent) { play('Idle'); return; }          // nothing worth interrupting for
+    applyBrain(out);
+  } catch (err) { console.warn('[greeting]', err); setMood('greet'); }
+}
+
 chatForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   ensureAudio();                                   // unlock audio on a user gesture
@@ -358,16 +389,7 @@ chatForm.addEventListener('submit', async (e) => {
     const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: text }) });
     const out = await r.json();
     if (!r.ok) throw new Error(out.error || r.status);
-    const m = MOODS[out.mood] || MOODS.calm;
-    glowTarget = m.glow;
-    faceTarget.Happy = out.face.happy; faceTarget.MouthOpen = voiceOn ? 0 : out.face.mouthOpen * 0.6;   // with voice, lip sync drives the mouth
-    setTimeout(() => { faceTarget.MouthOpen = 0; }, Math.min(4000, out.reply.length * 60));
-    const loopy = ['Idle', 'TailWag', 'Sleep'].includes(out.animation);
-    play(out.animation, 0.35, loopy ? undefined : (out.mood === 'playful' ? 'TailWag' : 'Idle'));
-    document.getElementById('tMood').textContent = out.mood;
-    say(out.reply);
-    speakOut(out.reply);
-    console.log(`[brain] ${out.provider} ${out.ms}ms`, out);
+    applyBrain(out);
   } catch (err) {
     console.error(err);
     play('Idle');

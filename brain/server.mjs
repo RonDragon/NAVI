@@ -24,6 +24,7 @@ const PERSONA = fs.readFileSync(path.join(here, "persona.md"), "utf8").replace("
 
 const MOODS = ["calm", "happy", "curious", "greet", "playful", "tired"];
 const ANIMS = ["Idle", "Wave", "HappyJump", "TailWag", "Listen", "Sleep"];
+const FOLLOWUP_INTENTS = ["ask_outcome", "prepare", "check_progress", "support", "celebrate"];
 const SCHEMA = {
   type: "object",
   properties: {
@@ -37,8 +38,20 @@ const SCHEMA = {
       additionalProperties: false,
     },
     remember: { type: ["string", "null"] },
+    // a future event worth following up on (Follow-up Engine, Bible §15.4)
+    followUp: {
+      type: ["object", "null"],
+      properties: {
+        subject: { type: "string" },          // short Hebrew, e.g. "הראיון בחברת X"
+        eventAt: { type: "string" },          // ISO 8601 with +03:00/+02:00 offset
+        askAfter: { type: "string" },         // ISO 8601 — when it's natural to ask
+        intent: { type: "string", enum: FOLLOWUP_INTENTS },
+      },
+      required: ["subject", "eventAt", "askAfter", "intent"],
+      additionalProperties: false,
+    },
   },
-  required: ["reply", "mood", "animation", "face", "remember"],
+  required: ["reply", "mood", "animation", "face", "remember", "followUp"],
   additionalProperties: false,
 };
 const SCHEMA_FILE = path.join(DATA, "reply-schema.json");
@@ -50,29 +63,44 @@ const MEMORY_FILE = path.join(DATA, "memory.json");
 const load = (f, d) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return d; } };
 let history = load(HISTORY_FILE, []);   // [{role:"user"|"navi", text, at}]
 let memory = load(MEMORY_FILE, []);     // [{fact, at}]
+const FOLLOWUPS_FILE = path.join(DATA, "followups.json");
+let followups = load(FOLLOWUPS_FILE, []); // [{id, subject, eventAt, askAfter, intent, status: pending|asked|expired, createdAt}]
 const save = () => {
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(history.slice(-200), null, 1));
   fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 1));
+  fs.writeFileSync(FOLLOWUPS_FILE, JSON.stringify(followups, null, 1));
 };
 
 // cheap guard: never keep things that look like secrets
 const SECRET = /(\b\d{4}[ -]?\d{4}[ -]?\d{4}[ -]?\d{4}\b)|(סיסמ|password|קוד אימות|otp)/i;
 
+const TZ = "Asia/Jerusalem";
+function nowLabel(d = new Date()) {
+  // e.g. "2026-09-25T17:05:00+03:00 (יום שישי, 17:05)" — the model needs an exact date to resolve "tomorrow"
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZoneName: "longOffset" }).formatToParts(d).map((p) => [p.type, p.value]));
+  const off = (parts.timeZoneName || "GMT+03:00").replace("GMT", "") || "+00:00";
+  const he = d.toLocaleString("he-IL", { timeZone: TZ, weekday: "long", hour: "2-digit", minute: "2-digit" });
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00${off} (${he})`;
+}
+
 function contextBlock() {
   const facts = memory.length ? memory.map((m) => `- ${m.fact}`).join("\n") : "- (nothing yet — you just met)";
-  const now = new Date().toLocaleString("he-IL", { timeZone: "Asia/Jerusalem", weekday: "long", hour: "2-digit", minute: "2-digit" });
-  return `## What you know about the Operator\n${facts}\n\n## Now\n${now}`;
+  const open = followups.filter((f) => f.status === "pending");
+  const fu = open.length ? open.map((f) => `- ${f.subject} (event ${f.eventAt}, ask after ${f.askAfter})`).join("\n") : "- (none)";
+  return `## What you know about the Operator\n${facts}\n\n## Things you're waiting to hear about (already tracked — don't create duplicates)\n${fu}\n\n## Now\n${nowLabel()}`;
 }
 
 // ---------- providers ----------
-async function askAnthropic(userText) {
+// turn = { kind: "message", text } from the Operator, or { kind: "event", text } from the app (e.g. app opened)
+async function askAnthropic(turn) {
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic();
   const messages = [];
   for (const h of history.slice(-CONFIG.historyTurns * 2)) {
     messages.push({ role: h.role === "user" ? "user" : "assistant", content: h.text });
   }
-  messages.push({ role: "user", content: userText });
+  messages.push({ role: "user", content: turn.kind === "event" ? `(system event — not the Operator speaking)\n${turn.text}` : turn.text });
   const response = await client.beta.messages.create({
     model: "claude-opus-5",
     max_tokens: 2000,
@@ -90,11 +118,12 @@ async function askAnthropic(userText) {
   return JSON.parse(text);
 }
 
-function askCodex(userText) {
+function askCodex(turn) {
   const transcript = history.slice(-CONFIG.historyTurns * 2)
     .map((h) => `${h.role === "user" ? "Operator" : "Pixel"}: ${h.text}`).join("\n");
+  const header = turn.kind === "event" ? "## App event (not the Operator speaking)" : "## New message from the Operator";
   const prompt = `${PERSONA}\n\n${contextBlock()}\n\n## Conversation so far\n${transcript || "(start)"}\n\n` +
-    `## New message from the Operator\n${userText}\n\n` +
+    `${header}\n${turn.text}\n\n` +
     `Reply as Pixel. Output only the JSON object required by the schema. Do not run any commands or read any files.`;
   const outFile = path.join(os.tmpdir(), `navi-reply-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
   return new Promise((resolve, reject) => {
@@ -123,9 +152,9 @@ function askCodex(userText) {
 
 const PROVIDER = process.env.ANTHROPIC_API_KEY ? "anthropic" : "codex";
 
-async function think(userText) {
+async function think(turn) {
   const t0 = Date.now();
-  const out = PROVIDER === "anthropic" ? await askAnthropic(userText) : await askCodex(userText);
+  const out = PROVIDER === "anthropic" ? await askAnthropic(turn) : await askCodex(turn);
   // sanitize model output before it drives the body
   out.mood = MOODS.includes(out.mood) ? out.mood : "calm";
   out.animation = ANIMS.includes(out.animation) ? out.animation : "Idle";
@@ -134,13 +163,63 @@ async function think(userText) {
   out.ms = Date.now() - t0;
   out.provider = PROVIDER;
 
-  history.push({ role: "user", text: userText, at: new Date().toISOString() });
+  if (turn.kind === "message") history.push({ role: "user", text: turn.text, at: new Date().toISOString() });
   history.push({ role: "navi", text: out.reply, at: new Date().toISOString() });
   if (out.remember && !SECRET.test(out.remember) && !memory.some((m) => m.fact === out.remember)) {
     memory.push({ fact: out.remember, at: new Date().toISOString() });
   }
+  trackFollowUp(out.followUp);
   save();
   return out;
+}
+
+// ---------- Follow-up Engine (Bible §15.4): remember future events, ask about them once ----------
+function trackFollowUp(f) {
+  if (!f || !f.subject) return;
+  const eventAt = Date.parse(f.eventAt), askAfter = Date.parse(f.askAfter);
+  if (Number.isNaN(eventAt) || Number.isNaN(askAfter)) return;
+  if (eventAt < Date.now() - 36 * 3600e3) return;                        // already long past
+  if (followups.some((x) => x.status === "pending" && (x.subject === f.subject || Math.abs(Date.parse(x.eventAt) - eventAt) < 3600e3))) return;
+  followups.push({ id: Math.random().toString(36).slice(2, 10), subject: f.subject, eventAt: f.eventAt, askAfter: f.askAfter,
+    intent: FOLLOWUP_INTENTS.includes(f.intent) ? f.intent : "ask_outcome", status: "pending", createdAt: new Date().toISOString() });
+}
+
+// What's going on when the Operator opens the app — decides whether Pixel should speak first.
+function openingSituation() {
+  const now = Date.now();
+  for (const f of followups) if (f.status === "pending" && Date.parse(f.eventAt) < now - 4 * 86400e3) f.status = "expired";
+  const last = history.length ? Date.parse(history[history.length - 1].at) : null;
+  const gapMin = last ? Math.round((now - last) / 60000) : null;
+  const due = followups.filter((f) => f.status === "pending" && Date.parse(f.askAfter) <= now)
+    .sort((a, b) => Date.parse(b.eventAt) - Date.parse(a.eventAt));
+  const soon = followups.filter((f) => f.status === "pending" && !f.encouragedAt
+    && Date.parse(f.eventAt) > now && Date.parse(f.eventAt) - now < 3 * 3600e3);
+  const reasons = [];
+  if (gapMin === null) reasons.push("first_meeting");
+  if (due.length) reasons.push("followup_due");
+  if (soon.length) reasons.push("event_soon");
+  if (gapMin !== null && gapMin >= 180) reasons.push("back_after_a_while");
+  return { gapMin, due, soon, reasons };
+}
+
+async function greet() {
+  const s = openingSituation();
+  if (!s.reasons.length) { save(); return { silent: true, reasons: [] }; }   // nothing worth interrupting for — silence is fine
+  const pick = s.due[0] || s.soon[0] || null;
+  const lines = [
+    "The Operator just opened the app and is looking at you. Say the first thing, like a friend who noticed them.",
+    `Time since your last exchange: ${s.gapMin === null ? "never talked before" : `${s.gapMin} minutes`}.`,
+    pick && s.due[0] === pick ? `Follow-up due — ask briefly and warmly how this went: "${pick.subject}" (was at ${pick.eventAt}).` : "",
+    pick && s.soon[0] === pick ? `Coming up soon — a short, practical word of encouragement: "${pick.subject}" at ${pick.eventAt}.` : "",
+    "Rules: at most ONE topic. One or two short sentences. Match the time of day. Never guilt the Operator for being away.",
+    "If nothing special, a light natural opener is enough. followUp must be null unless the Operator told you something new.",
+  ].filter(Boolean).join("\n");
+  const out = await think({ kind: "event", text: lines });
+  // each follow-up is asked once (maxAttempts 1); an encouragement before the event doesn't close it
+  if (pick && s.due[0] === pick) { pick.status = "asked"; pick.askedAt = new Date().toISOString(); }
+  else if (pick) pick.encouragedAt = new Date().toISOString();
+  save();
+  return { ...out, silent: false, reasons: s.reasons };
 }
 
 // ---------- voice (edge-tts: free Microsoft neural Hebrew voices, no key) ----------
@@ -192,11 +271,23 @@ const server = http.createServer(async (req, res) => {
     try {
       const { message } = JSON.parse(body || "{}");
       if (!message || typeof message !== "string" || message.length > 2000) throw new Error("bad message");
-      const out = await think(message.trim());
+      const out = await think({ kind: "message", text: message.trim() });
       res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(out));
     } catch (e) {
       console.error("[chat]", e.message);
+      res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+    return;
+  }
+  if (url.pathname === "/api/greeting" && req.method === "POST") {
+    try {
+      const out = await greet();
+      res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify(out));
+    } catch (e) {
+      console.error("[greeting]", e.message);
       res.writeHead(500, { "content-type": "application/json; charset=utf-8" });
       res.end(JSON.stringify({ error: e.message }));
     }
@@ -219,7 +310,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/state") {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ provider: PROVIDER, memory, history: history.slice(-20) }));
+    res.end(JSON.stringify({ provider: PROVIDER, memory, followups, history: history.slice(-20) }));
     return;
   }
 
