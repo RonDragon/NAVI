@@ -6,3 +6,7 @@ assets/models/hunyuan/
 tools/astra/*.log
 *.blend1
 __pycache__/
+
+# brain runtime data (conversation + memory are personal)
+brain/data/
+node_modules/

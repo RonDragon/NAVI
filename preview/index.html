@@ -59,6 +59,17 @@ canvas{display:block}
 @keyframes txt{0%{opacity:0}50%{opacity:1}100%{opacity:.6}}
 @keyframes out{to{opacity:0;visibility:hidden}}
 
+.manual{display:none}
+.manual.open{display:block}
+.chat{display:flex;gap:8px;align-items:center;max-width:620px;margin:8px auto 0}
+.chat input{flex:1;min-width:0;background:#0b1c2ae6;border:1px solid var(--line);border-radius:99px;padding:12px 16px;color:var(--ice);font:400 15px Heebo;outline:none}
+.chat input:focus{border-color:var(--cyan);box-shadow:0 0 18px #18e0e833}
+.chat button{flex:none;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--panel);color:var(--ice);font-size:17px;cursor:pointer}
+.chat .send{background:linear-gradient(135deg,#18e0e8,#1b7fd6);color:#021018;border:none;box-shadow:0 0 18px #18e0e866}
+.chat.busy .send{opacity:.4;pointer-events:none}
+.tog.on{color:var(--cyan);border-color:var(--cyan)}
+.bubble.thinking #say::after{content:'';display:inline-block;width:1.2em;text-align:left;animation:dots 1s steps(4) infinite}
+@keyframes dots{0%{content:''}25%{content:'.'}50%{content:'..'}75%{content:'...'}}
 #loading{position:fixed;inset:0;display:grid;place-items:center;font:500 13px 'IBM Plex Mono';color:var(--muted);z-index:4;direction:ltr}
 @media (max-width:640px){.telemetry{display:none}.chip{font-size:12px;padding:7px 11px}}
 </style>
@@ -75,12 +86,19 @@ canvas{display:block}
 <div class="bubble hide" id="bubble"><div class="who">פיקסל</div><div id="say"></div></div>
 
 <div class="dock">
-  <div class="label">מצב רוח</div>
-  <div class="row" id="moods"></div>
-  <div class="label">אנימציות</div>
-  <div class="row" id="anims"></div>
-  <div class="label">פנים</div>
-  <div class="row" id="faces"></div>
+  <div id="manual" class="manual">
+    <div class="label">מצב רוח</div>
+    <div class="row" id="moods"></div>
+    <div class="label">אנימציות</div>
+    <div class="row" id="anims"></div>
+    <div class="label">פנים</div>
+    <div class="row" id="faces"></div>
+  </div>
+  <form class="chat" id="chat" autocomplete="off">
+    <button type="button" class="tog" id="tog" title="שליטה ידנית">⚙</button>
+    <input id="msg" placeholder="דבר עם פיקסל..." maxlength="500">
+    <button class="send" id="send" title="שלח">➤</button>
+  </form>
 </div>
 
 <div id="linkup"><div class="grid"></div><div class="scan"></div><div class="core"></div><div class="txt">LINK UP</div></div>
@@ -239,13 +257,53 @@ function setMood(k) {
 }
 
 let sayTimer;
-function say(text) {
+function say(text, { thinking = false } = {}) {
   const b = document.getElementById('bubble');
   document.getElementById('say').textContent = text;
+  b.classList.toggle('thinking', thinking);
   b.classList.remove('hide');
   clearTimeout(sayTimer);
-  sayTimer = setTimeout(() => b.classList.add('hide'), 3800);
+  if (!thinking) sayTimer = setTimeout(() => b.classList.add('hide'), Math.max(3800, text.length * 90));
 }
+
+// ---------- brain (chat) ----------
+const chatForm = document.getElementById('chat');
+const msgInput = document.getElementById('msg');
+document.getElementById('tog').onclick = (e) => {
+  document.getElementById('manual').classList.toggle('open');
+  e.currentTarget.classList.toggle('on');
+};
+chatForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = msgInput.value.trim();
+  if (!text || chatForm.classList.contains('busy')) return;
+  msgInput.value = '';
+  chatForm.classList.add('busy');
+  play('Listen', 0.3, 'Idle');                     // he listens while he thinks
+  glowTarget = 4;
+  say('', { thinking: true });
+  try {
+    const r = await fetch('/api/chat', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ message: text }) });
+    const out = await r.json();
+    if (!r.ok) throw new Error(out.error || r.status);
+    const m = MOODS[out.mood] || MOODS.calm;
+    glowTarget = m.glow;
+    faceTarget.Happy = out.face.happy; faceTarget.MouthOpen = out.face.mouthOpen * 0.6;
+    setTimeout(() => { faceTarget.MouthOpen = 0; }, Math.min(4000, out.reply.length * 60));
+    const loopy = ['Idle', 'TailWag', 'Sleep'].includes(out.animation);
+    play(out.animation, 0.35, loopy ? undefined : (out.mood === 'playful' ? 'TailWag' : 'Idle'));
+    document.getElementById('tMood').textContent = out.mood;
+    say(out.reply);
+    console.log(`[brain] ${out.provider} ${out.ms}ms`, out);
+  } catch (err) {
+    console.error(err);
+    play('Idle');
+    say('משהו בחיבור שלי התנתק לרגע. תנסה שוב?');
+  } finally {
+    chatForm.classList.remove('busy');
+    msgInput.focus();
+  }
+});
 
 function buildUI() {
   const mk = (parent, k, label, cls, fn) => {
@@ -285,13 +343,17 @@ renderer.domElement.addEventListener('click', (e) => {
 });
 
 const headQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
+let headAnim = null;   // head pose as set by the animation, before the look-at offset
 let look = new THREE.Vector2();
 const clock = new THREE.Clock();
 
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
   controls.update();
+  // undo last frame's look-at offset, so it never accumulates on tracks the clip doesn't drive
+  if (bones['Head'] && headAnim) bones['Head'].quaternion.copy(headAnim);
   if (mixer) mixer.update(dt);
+  if (bones['Head']) headAnim = (headAnim || new THREE.Quaternion()).copy(bones['Head'].quaternion);
 
   if (navi) {
     // head follows the pointer (added on top of the animation)
