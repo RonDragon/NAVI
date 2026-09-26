@@ -12,6 +12,7 @@ import path from "node:path";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import * as Mem from "./memory/engine.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..");
@@ -61,8 +62,34 @@ const SCHEMA = {
       required: ["id", "outcome", "sharedMoment"],
       additionalProperties: false,
     },
+    // MemoryEngine v1 (docs/06 §2): the model proposes, the engine decides strength / forgetting / recall
+    memoryCandidate: {                         // a meaningful episode worth remembering (not every message)
+      type: ["object", "null"],
+      properties: {
+        gist: { type: "string" },
+        details: { type: "array", items: { type: "object", properties: { key: { type: "string" }, value: { type: "string" },
+          salience: { type: "number" } }, required: ["key", "value", "salience"], additionalProperties: false } },
+        people: { type: "array", items: { type: "string" } },
+        places: { type: "array", items: { type: "string" } },
+        topics: { type: "array", items: { type: "string" } },
+        importance: { type: "number" }, arousal: { type: "number" }, valence: { type: "number" }, relationshipMeaning: { type: "number" },
+      },
+      required: ["gist", "details", "people", "places", "topics", "importance", "arousal", "valence", "relationshipMeaning"],
+      additionalProperties: false,
+    },
+    usedMemoryIds: { type: "array", items: { type: "string" } },   // recalled memories you actually used in this reply
+    memoryCorrection: {                        // the Operator corrected something you remembered
+      type: ["object", "null"],
+      properties: {
+        memoryId: { type: "string" }, newGist: { type: ["string", "null"] },
+        correctedDetails: { type: "array", items: { type: "object", properties: { key: { type: "string" }, value: { type: "string" } },
+          required: ["key", "value"], additionalProperties: false } },
+      },
+      required: ["memoryId", "newGist", "correctedDetails"],
+      additionalProperties: false,
+    },
   },
-  required: ["reply", "mood", "animation", "face", "remember", "followUp", "followUpAnswer"],
+  required: ["reply", "mood", "animation", "face", "remember", "followUp", "followUpAnswer", "memoryCandidate", "usedMemoryIds", "memoryCorrection"],
   additionalProperties: false,
 };
 const SCHEMA_FILE = path.join(DATA, "reply-schema.json");
@@ -73,12 +100,16 @@ const HISTORY_FILE = path.join(DATA, "history.json");
 const MEMORY_FILE = path.join(DATA, "memory.json");
 const load = (f, d) => { try { return JSON.parse(fs.readFileSync(f, "utf8")); } catch { return d; } };
 let history = load(HISTORY_FILE, []);   // [{role:"user"|"navi", text, at}]
-let memory = load(MEMORY_FILE, []);     // [{fact, at}]
+// MemoryEngine state (v2). On first run, the v0 fact list (memory.json) is migrated and left untouched as a backup.
+const MEM_FILE = path.join(DATA, "memory-v2.json");
+let mem = load(MEM_FILE, null) || Mem.migrateV0(Mem.emptyState(), load(MEMORY_FILE, []));
+let lastRecall = [];                    // ids offered to the model this turn (only these may be marked used/corrected)
+let lastMoodValence = 0.1;
 const FOLLOWUPS_FILE = path.join(DATA, "followups.json");
 let followups = load(FOLLOWUPS_FILE, []); // [{id, subject, eventAt, askAfter, intent, status: pending|asked|expired, createdAt}]
 const save = () => {
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(history.slice(-200), null, 1));
-  fs.writeFileSync(MEMORY_FILE, JSON.stringify(memory, null, 1));
+  fs.writeFileSync(MEM_FILE, JSON.stringify(mem, null, 1));
   fs.writeFileSync(FOLLOWUPS_FILE, JSON.stringify(followups, null, 1));
 };
 
@@ -95,15 +126,26 @@ function nowLabel(d = new Date()) {
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:00${off} (${he})`;
 }
 
-function contextBlock() {
-  const facts = memory.filter((m) => m.type !== "shared").map((m) => `- ${m.fact}`);
-  const shared = memory.filter((m) => m.type === "shared").slice(-5).map((m) => `- ${m.fact}`);
+function contextBlock(turn = { text: "" }) {
+  const now = Date.now();
+  // what Pixel *actually remembers right now*: cued by this message + the last thing the Operator said
+  const lastUser = [...history].reverse().find((h) => h.role === "user");
+  const cueText = `${turn.text || ""} ${turn.kind === "event" ? (lastUser?.text || "") : ""}`;
+  const recalled = Mem.recall(mem, { text: cueText, moodValence: lastMoodValence }, now);
+  const known = Mem.knownFacts(mem, now);
+  lastRecall = [...recalled.map((r) => r.id), ...known.map((k) => k.id)];
+  const facts = known.map((k) => `- [${k.id}] ${k.proposition}${k.confidence < 0.6 ? ` (not sure, ${k.confidence})` : ""}`);
+  const memories = recalled.map((r) => {
+    const det = r.details.map((d) => `${d.key}: ${d.value} (confidence ${d.confidence})`).join("; ");
+    return `- [${r.id}] ${r.gist}${r.shared ? " — a moment you shared" : ""} (≈${r.whenDaysAgo} days ago, confidence ${r.confidence})${det ? ` | details: ${det}` : ""}`;
+  });
   const open = followups.filter((f) => f.status === "pending");
   const fu = open.length ? open.map((f) => `- ${f.subject} (${f.eventAt ? `event ${f.eventAt}` : "ongoing"}, ask after ${f.askAfter})`).join("\n") : "- (none)";
   const asked = followups.filter((f) => f.status === "asked" && Date.now() - Date.parse(f.askedAt) < 12 * 3600e3);
   const waiting = asked.length ? asked.map((f) => `- id=${f.id}: you asked about "${f.subject}"`).join("\n") : "- (none)";
   return `## What you know about the Operator\n${facts.join("\n") || "- (nothing yet — you just met)"}\n\n` +
-    (shared.length ? `## Moments you shared\n${shared.join("\n")}\n\n` : "") +
+    `## What comes to mind right now (your memories — ids in brackets)\n${memories.join("\n") || "- (nothing in particular)"}\n` +
+    `Details under confidence 0.6 are fuzzy: hedge them ("נדמה לי...", "זה היה ביום חמישי?") or leave them out — never state them as fact.\n\n` +
     `## Things you're waiting to hear about (already tracked — don't create duplicates)\n${fu}\n\n` +
     `## Waiting for an answer (if this message answers one, fill followUpAnswer with its id)\n${waiting}\n\n## Now\n${nowLabel()}`;
 }
@@ -125,7 +167,7 @@ async function askAnthropic(turn) {
     fallbacks: "default",
     system: [
       { type: "text", text: PERSONA, cache_control: { type: "ephemeral" } },
-      { type: "text", text: contextBlock() },
+      { type: "text", text: contextBlock(turn) },
     ],
     output_config: { effort: "low", format: { type: "json_schema", schema: SCHEMA } },
     messages,
@@ -139,7 +181,7 @@ function askCodex(turn) {
   const transcript = history.slice(-CONFIG.historyTurns * 2)
     .map((h) => `${h.role === "user" ? "Operator" : "Pixel"}: ${h.text}`).join("\n");
   const header = turn.kind === "event" ? "## App event (not the Operator speaking)" : "## New message from the Operator";
-  const prompt = `${PERSONA}\n\n${contextBlock()}\n\n## Conversation so far\n${transcript || "(start)"}\n\n` +
+  const prompt = `${PERSONA}\n\n${contextBlock(turn)}\n\n## Conversation so far\n${transcript || "(start)"}\n\n` +
     `${header}\n${turn.text}\n\n` +
     `Reply as Pixel. Output only the JSON object required by the schema. Do not run any commands or read any files.`;
   const outFile = path.join(os.tmpdir(), `navi-reply-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
@@ -182,9 +224,14 @@ async function think(turn) {
 
   if (turn.kind === "message") history.push({ role: "user", text: turn.text, at: new Date().toISOString() });
   history.push({ role: "navi", text: out.reply, at: new Date().toISOString() });
-  if (out.remember && !SECRET.test(out.remember) && !memory.some((m) => m.fact === out.remember)) {
-    memory.push({ fact: out.remember, at: new Date().toISOString() });
-  }
+  // MemoryEngine: the model proposed; the engine decides (only memories that were offered can be used/corrected)
+  const now = Date.now(), evt = `evt_${now}`;
+  if (out.remember && !SECRET.test(out.remember)) Mem.learnFact(mem, out.remember, now, evt);
+  if (out.memoryCandidate && !SECRET.test(JSON.stringify(out.memoryCandidate))) Mem.encodeEpisode(mem, out.memoryCandidate, now, evt);
+  Mem.markUsed(mem, (out.usedMemoryIds || []).filter((i) => lastRecall.includes(i)), now);
+  if (out.memoryCorrection && lastRecall.includes(out.memoryCorrection.memoryId)) Mem.reconsolidate(mem, out.memoryCorrection, now, evt);
+  lastMoodValence = { happy: 0.7, playful: 0.5, greet: 0.4, curious: 0.2, calm: 0.1, tired: -0.2 }[out.mood] ?? 0;
+  if (out.animation === "Concerned") lastMoodValence = -0.4;
   trackFollowUp(out.followUp);
   if (turn.kind === "message") closeFollowUp(out);
   save();
@@ -224,7 +271,8 @@ function closeFollowUp(out) {
   if (!f || a.outcome === "unclear") return;
   f.status = "closed"; f.outcome = a.outcome; f.closedAt = new Date().toISOString();
   if (a.outcome === "good") {
-    if (a.sharedMoment && !SECRET.test(a.sharedMoment)) memory.push({ fact: a.sharedMoment, type: "shared", at: f.closedAt });
+    if (a.sharedMoment && !SECRET.test(a.sharedMoment)) Mem.encodeEpisode(mem, { gist: a.sharedMoment, details: [], people: [], places: [],
+      topics: [f.subject], importance: 0.85, arousal: 0.8, valence: 0.9, relationshipMeaning: 0.9, shared: true }, Date.now(), `fu_${f.id}`);
     if (!["Celebrate", "HappyJump"].includes(out.animation)) out.animation = "Celebrate";   // a win deserves the body
   }
   if (a.outcome === "bad" && !f.care) {        // not another nag: one quiet check-in tomorrow, then let it be
@@ -261,6 +309,8 @@ function openingSituation() {
 }
 
 async function greet() {
+  // "sleep": while the Operator was away, near-duplicate episodes get consolidated (at most every 12h)
+  if (Date.now() - (mem.lastConsolidatedAt || 0) > 12 * 3600e3) Mem.consolidate(mem, Date.now());
   const s = openingSituation();
   if (!s.reasons.length) { save(); return { silent: true, reasons: [] }; }   // nothing worth interrupting for — silence is fine
   // at most ONE topic, by priority: what happened > what's about to happen > tomorrow's thing
@@ -381,7 +431,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/state") {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ provider: PROVIDER, memory, followups, history: history.slice(-20) }));
+    res.end(JSON.stringify({ provider: PROVIDER, memory: mem, followups, history: history.slice(-20) }));
     return;
   }
 

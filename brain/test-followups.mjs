@@ -50,7 +50,7 @@ await withServer({ followups: [fu({ eventAt: iso(-4 * H), askAfter: iso(-1 * H) 
   const s = await api("/api/state");
   check("good answer: closed as good", s.followups[0].status === "closed" && s.followups[0].outcome === "good", `→ "${a.reply}"`);
   check("good answer: body celebrates", ["Celebrate", "HappyJump"].includes(a.animation), a.animation);
-  check("good answer: shared memory saved", s.memory.some((m) => m.type === "shared"), JSON.stringify(s.memory));
+  check("good answer: shared memory saved", s.memory.episodes.some((m) => m.shared), JSON.stringify(s.memory.episodes.map((e) => e.gist)));
   const g2 = await api("/api/greeting", {});
   check("after: never asks twice", g2.silent === true);
 });
