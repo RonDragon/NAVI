@@ -191,6 +191,7 @@ let navi, mixer, actions = {}, current, faceMesh, morph = {}, bones = {}, glowMa
 const face = { Blink: 0, Happy: 0, MouthOpen: 0, Surprised: 0, Sad: 0 };        // manual face layer
 const faceTarget = { Blink: 0, Happy: 0, MouthOpen: 0, Surprised: 0, Sad: 0 };
 let glowTarget = 3, glow = 3;
+const emoFace = { Sad: 0, Surprised: 0 };      // the lingering face of the current feeling (reflexes return to it, not to blank)
 const pointer = new THREE.Vector2();
 let lookWeight = 1;
 
@@ -219,7 +220,7 @@ new GLTFLoader().load(MODEL, (gltf) => {
       for (const m of mats) if (m.name === 'Navi_Glow') glowMats.push(m);
     }
   });
-  window.__navi = { bones, actions: () => actions, react };   // debug handle
+  window.__navi = { bones, actions: () => actions, react, applyBrain, face: () => ({ ...faceTarget }), glow: () => glowTarget };   // debug handle
   mixer = new THREE.AnimationMixer(navi);
   for (const clip of gltf.animations) {
     const a = mixer.clipAction(clip);
@@ -348,11 +349,14 @@ function stopRec() { recOn = false; micBtn.classList.remove('rec'); }
 // one brain reply -> body, face, bubble, voice
 function applyBrain(out) {
   const m = MOODS[out.mood] || MOODS.calm;
-  glowTarget = m.glow;
+  glowTarget = out.glow ?? m.glow;                 // the emotion system sets the glow (dimmer when sad, brighter when excited)
   faceTarget.Happy = out.face.happy; faceTarget.MouthOpen = voiceOn ? 0 : out.face.mouthOpen * 0.6;   // with voice, lip sync drives the mouth
-  setTimeout(() => { faceTarget.MouthOpen = 0; faceTarget.Happy = 0; }, Math.min(6000, 1500 + out.reply.length * 60));
+  emoFace.Sad = Math.max(out.face.sad || 0, out.animation === 'Concerned' ? 0.7 : 0); emoFace.Surprised = out.face.surprised || 0;
+  Object.assign(faceTarget, { Sad: emoFace.Sad, Surprised: emoFace.Surprised });
+  setTimeout(() => { faceTarget.MouthOpen = 0; faceTarget.Happy = 0; emoFace.Surprised = 0; emoFace.Sad *= 0.4;
+    Object.assign(faceTarget, { Sad: emoFace.Sad, Surprised: 0 }); }, Math.min(6000, 1500 + out.reply.length * 60));
   const loopy = LOOP.has(out.animation);
-  if (out.animation === 'Concerned') faceTarget.Sad = 0.7;
+  if (out.feelings) document.getElementById('tMood').title = out.feelings.map((e) => `${e.type} ${e.intensity}`).join(' · ');
   play(out.animation, 0.35, loopy ? undefined : (out.mood === 'playful' ? 'TailWag' : 'Idle'));
   document.getElementById('tMood').textContent = out.mood;
   say(out.reply);
@@ -544,7 +548,7 @@ function tick() {
     // reflexes: fast attack (~150ms), slow release back to neutral
     if (performance.now() > reflexUntil) {
       Object.assign(reflexTarget, { perk: 0, tilt: 0, nod: 0, wagAmp: 0, wagSpeed: 6 });
-      faceTarget.Surprised = 0; faceTarget.Sad = 0;
+      faceTarget.Surprised = emoFace.Surprised; faceTarget.Sad = emoFace.Sad;   // reflex over: back to what he feels
     }
     const k = 1 - Math.pow(reflexUntil > performance.now() ? 1e-6 : 0.02, dt);
     for (const key in reflex) reflex[key] += (reflexTarget[key] - reflex[key]) * k;

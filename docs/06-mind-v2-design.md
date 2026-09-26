@@ -223,12 +223,17 @@ simple? ── yes → local response (sub-second / few seconds)
 
 | שלב | מה | למה |
 |---|---|---|
-| **1 — עכשיו** | **MemoryEngine v1 ב-Node**: working, episodic, semantic, procedural; ‏cues; ‏activation; זיכרון חלקי; consolidation; ‏reconsolidation ב-revisions. עם בדיקות | "המערכת הזו תשנה בפועל מי ה-Navi נהיה." משפיע יותר מהחלפת מודל |
-| 2 | חיבור רגש וזיכרון: חוזק קידוד רגשי, ‏mood congruence, רגש שמתעורר בהיזכרות | המעגל חוויה → רגש → זיכרון → appraisal |
-| 3 | הוצאת החלטות מה-LLM: הוא מחזיר appraisal observations, וה-Emotion Engine מחליט | "LLM observes. Core decides." |
+| **1 — ✅ בוצע** | **MemoryEngine v1 ב-Node**: working, episodic, semantic, procedural; ‏cues; ‏activation; זיכרון חלקי; consolidation; ‏reconsolidation ב-revisions. עם בדיקות | "המערכת הזו תשנה בפועל מי ה-Navi נהיה." משפיע יותר מהחלפת מודל |
+| **2 — ✅ בוצע** | חיבור רגש וזיכרון: חוזק קידוד רגשי, ‏mood congruence, רגש שמתעורר בהיזכרות | המעגל חוויה → רגש → זיכרון → appraisal |
+| **3 — ✅ בוצע** | הוצאת החלטות מה-LLM: הוא מחזיר appraisal observations, וה-Emotion Engine מחליט | "LLM observes. Core decides." |
 | 4 | מעטפת אנדרואיד (עם מוח בשרת) | |
 | 5 | Local Brain bake-off על הטלפון שלך | בחירת מודל ו-runtime לפי מדידה, לא לפי אינטרנט |
 | 6 | Hybrid Router: ‏deterministic, ‏local_fast או cloud | היעד: התגובה המהירה והפרטית ביותר שעדיין חכמה מספיק |
+
+### מה נבנה בשלבים 2 ו-3
+- `brain/affect/engine.mjs` (Affective Core v1): appraisal בן 12 שדות מה-LLM. טמפרמנט שמטה את הקריאה. וקטור של 11 רגשות עם half-life. ‏PAD mood שחוזר ל-baseline (λ≈0.15 לשעה). ויסות (תמיכת ה-Operator מרככת). ‏embodiment: אנימציה, פנים, זוהר וקול. ‏TraitEvidence צמיג (20+ עדויות, צעד של 0.02).
+- חיבור לזיכרון: חוויה נשמרת עם הרגש של פיקסל ברגע הקידוד (60% core, ‏40% הקריאה של המודל). ‏recall לפי ה-valence הנוכחי. זיכרון שנעשה בו שימוש מעורר הד חלש של הרגש (evoke).
+- בדיקות: `node --test brain/affect/engine.test.mjs` (9), ‏`node brain/test-affect-live.mjs` (8, בתיקייה זמנית).
 
 ### בדיקות ל-MemoryEngine (מ-GPT)
 - זוכר את ה-gist אבל שכח פרט.

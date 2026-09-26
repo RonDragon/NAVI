@@ -13,6 +13,7 @@ import os from "node:os";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import * as Mem from "./memory/engine.mjs";
+import * as Affect from "./affect/engine.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..");
@@ -39,6 +40,20 @@ const SCHEMA = {
       additionalProperties: false,
     },
     remember: { type: ["string", "null"] },
+    // Affective Core (docs/06 §1): the model only *observes* how this moment reads for Pixel; the core decides what he feels
+    appraisal: {
+      type: "object",
+      properties: {
+        novelty: { type: "number" }, pleasantness: { type: "number" }, goalRelevance: { type: "number" },
+        goalCongruence: { type: "number" }, agency: { type: "string", enum: ["operator", "navi", "other", "circumstance"] },
+        controllability: { type: "number" }, certainty: { type: "number" }, normCompatibility: { type: "number" },
+        relationshipRelevance: { type: "number" }, expectedness: { type: "number" }, copingPotential: { type: "number" },
+        operatorSupport: { type: "number" },
+      },
+      required: ["novelty", "pleasantness", "goalRelevance", "goalCongruence", "agency", "controllability", "certainty",
+        "normCompatibility", "relationshipRelevance", "expectedness", "copingPotential", "operatorSupport"],
+      additionalProperties: false,
+    },
     // a future event worth following up on (Follow-up Engine, Bible §15.4)
     followUp: {
       type: ["object", "null"],
@@ -89,7 +104,7 @@ const SCHEMA = {
       additionalProperties: false,
     },
   },
-  required: ["reply", "mood", "animation", "face", "remember", "followUp", "followUpAnswer", "memoryCandidate", "usedMemoryIds", "memoryCorrection"],
+  required: ["reply", "mood", "animation", "face", "remember", "appraisal", "followUp", "followUpAnswer", "memoryCandidate", "usedMemoryIds", "memoryCorrection"],
   additionalProperties: false,
 };
 const SCHEMA_FILE = path.join(DATA, "reply-schema.json");
@@ -104,13 +119,16 @@ let history = load(HISTORY_FILE, []);   // [{role:"user"|"navi", text, at}]
 const MEM_FILE = path.join(DATA, "memory-v2.json");
 let mem = load(MEM_FILE, null) || Mem.migrateV0(Mem.emptyState(), load(MEMORY_FILE, []));
 let lastRecall = [];                    // ids offered to the model this turn (only these may be marked used/corrected)
-let lastMoodValence = 0.1;
+// Affective Core state: emotions (fast, decaying), mood (PAD, slow), temperament (fixed), developed traits (viscous)
+const AFFECT_FILE = path.join(DATA, "affect.json");
+let affect = load(AFFECT_FILE, null) || Affect.emptyAffect();
 const FOLLOWUPS_FILE = path.join(DATA, "followups.json");
 let followups = load(FOLLOWUPS_FILE, []); // [{id, subject, eventAt, askAfter, intent, status: pending|asked|expired, createdAt}]
 const save = () => {
   fs.writeFileSync(HISTORY_FILE, JSON.stringify(history.slice(-200), null, 1));
   fs.writeFileSync(MEM_FILE, JSON.stringify(mem, null, 1));
   fs.writeFileSync(FOLLOWUPS_FILE, JSON.stringify(followups, null, 1));
+  fs.writeFileSync(AFFECT_FILE, JSON.stringify(affect, null, 1));
 };
 
 // cheap guard: never keep things that look like secrets
@@ -131,19 +149,26 @@ function contextBlock(turn = { text: "" }) {
   // what Pixel *actually remembers right now*: cued by this message + the last thing the Operator said
   const lastUser = [...history].reverse().find((h) => h.role === "user");
   const cueText = `${turn.text || ""} ${turn.kind === "event" ? (lastUser?.text || "") : ""}`;
-  const recalled = Mem.recall(mem, { text: cueText, moodValence: lastMoodValence }, now);
+  Affect.advance(affect, now);                                   // feelings faded / mood relaxed since last time
+  const recalled = Mem.recall(mem, { text: cueText, moodValence: Affect.valenceNow(affect) }, now);   // mood-congruent recall
   const known = Mem.knownFacts(mem, now);
   lastRecall = [...recalled.map((r) => r.id), ...known.map((k) => k.id)];
   const facts = known.map((k) => `- [${k.id}] ${k.proposition}${k.confidence < 0.6 ? ` (not sure, ${k.confidence})` : ""}`);
   const memories = recalled.map((r) => {
     const det = r.details.map((d) => `${d.key}: ${d.value} (confidence ${d.confidence})`).join("; ");
-    return `- [${r.id}] ${r.gist}${r.shared ? " — a moment you shared" : ""} (≈${r.whenDaysAgo} days ago, confidence ${r.confidence})${det ? ` | details: ${det}` : ""}`;
+    const tone = r.valence >= 0.4 ? ", a good memory" : r.valence <= -0.4 ? ", a painful memory" : "";
+    return `- [${r.id}] ${r.gist}${r.shared ? " — a moment you shared" : ""} (≈${r.whenDaysAgo} days ago, confidence ${r.confidence}${tone})${det ? ` | details: ${det}` : ""}`;
   });
+  const felt = Affect.top(affect, 3).filter((e) => e.intensity >= 0.15).map((e) => `${e.type} ${e.intensity}`).join(", ");
+  const m = affect.mood;
+  const feelings = `${felt || "nothing strong"}; overall mood ${m.p > 0.35 ? "bright" : m.p < 0 ? "low" : "okay"}` +
+    `${m.a > 0.35 ? ", energetic" : m.a < -0.25 ? ", sleepy" : ""}`;
   const open = followups.filter((f) => f.status === "pending");
   const fu = open.length ? open.map((f) => `- ${f.subject} (${f.eventAt ? `event ${f.eventAt}` : "ongoing"}, ask after ${f.askAfter})`).join("\n") : "- (none)";
   const asked = followups.filter((f) => f.status === "asked" && Date.now() - Date.parse(f.askedAt) < 12 * 3600e3);
   const waiting = asked.length ? asked.map((f) => `- id=${f.id}: you asked about "${f.subject}"`).join("\n") : "- (none)";
-  return `## What you know about the Operator\n${facts.join("\n") || "- (nothing yet — you just met)"}\n\n` +
+  return `## How you feel right now (from your emotion system, before this message — let it color your words; don't announce it)\n${feelings}\n\n` +
+    `## What you know about the Operator\n${facts.join("\n") || "- (nothing yet — you just met)"}\n\n` +
     `## What comes to mind right now (your memories — ids in brackets)\n${memories.join("\n") || "- (nothing in particular)"}\n` +
     `Details under confidence 0.6 are fuzzy: hedge them ("נדמה לי...", "זה היה ביום חמישי?") or leave them out — never state them as fact.\n\n` +
     `## Things you're waiting to hear about (already tracked — don't create duplicates)\n${fu}\n\n` +
@@ -219,21 +244,35 @@ async function think(turn) {
   out.animation = ANIMS.includes(out.animation) ? out.animation : "Idle";
   const clamp = (v) => Math.max(0, Math.min(1, Number(v) || 0));
   out.face = { happy: clamp(out.face?.happy), mouthOpen: clamp(out.face?.mouthOpen) };
+  const hint = { mood: out.mood, animation: out.animation };   // the model's suggestion (kept for debugging)
   out.ms = Date.now() - t0;
   out.provider = PROVIDER;
 
   if (turn.kind === "message") history.push({ role: "user", text: turn.text, at: new Date().toISOString() });
   history.push({ role: "navi", text: out.reply, at: new Date().toISOString() });
-  // MemoryEngine: the model proposed; the engine decides (only memories that were offered can be used/corrected)
   const now = Date.now(), evt = `evt_${now}`;
+  // Affective Core: the model observed the moment; the core decides what Pixel feels
+  if (out.appraisal) Affect.feel(affect, out.appraisal, now, evt);
+  // MemoryEngine: the model proposed; the engine decides (only memories that were offered can be used/corrected)
   if (out.remember && !SECRET.test(out.remember)) Mem.learnFact(mem, out.remember, now, evt);
-  if (out.memoryCandidate && !SECRET.test(JSON.stringify(out.memoryCandidate))) Mem.encodeEpisode(mem, out.memoryCandidate, now, evt);
-  Mem.markUsed(mem, (out.usedMemoryIds || []).filter((i) => lastRecall.includes(i)), now);
+  const used = (out.usedMemoryIds || []).filter((i) => lastRecall.includes(i));
+  Mem.markUsed(mem, used, now);
+  // remembering an experience brings back a weaker echo of how it felt
+  out.evoked = used.map((id) => mem.episodes.find((e) => e.id === id)).filter(Boolean)
+    .map((ep) => Affect.evoke(affect, ep, now)).filter(Boolean);
   if (out.memoryCorrection && lastRecall.includes(out.memoryCorrection.memoryId)) Mem.reconsolidate(mem, out.memoryCorrection, now, evt);
-  lastMoodValence = { happy: 0.7, playful: 0.5, greet: 0.4, curious: 0.2, calm: 0.1, tired: -0.2 }[out.mood] ?? 0;
-  if (out.animation === "Concerned") lastMoodValence = -0.4;
   trackFollowUp(out.followUp);
-  if (turn.kind === "message") closeFollowUp(out);
+  const answered = turn.kind === "message" ? closeFollowUp(out) : null;
+  // the feeling *at encoding* decides how strongly an experience is stored (emotional tagging)
+  if (out.memoryCandidate && !SECRET.test(JSON.stringify(out.memoryCandidate))) Mem.encodeEpisode(mem, emotionallyTagged(out.memoryCandidate), now, evt);
+  if (answered?.sharedMoment) Mem.encodeEpisode(mem, emotionallyTagged({ gist: answered.sharedMoment, details: [], people: [], places: [],
+    topics: [answered.subject], importance: 0.85, arousal: 0.8, valence: 0.9, relationshipMeaning: 0.9, shared: true }), now, answered.evt);
+  // the body shows what the core feels (strong feelings override the model's suggestion)
+  const body = Affect.embody(affect, out.animation);
+  Object.assign(out, { mood: body.mood, animation: body.animation, glow: body.glow, voice: body.voice, feelings: body.emotions, pad: body.pad, hint,
+    face: { happy: body.face.happy, mouthOpen: Math.max(out.face.mouthOpen * 0.5, body.face.mouthOpen), sad: body.face.sad, surprised: body.face.surprised } });
+  if (answered?.outcome === "good" && !["Celebrate", "HappyJump"].includes(out.animation)) out.animation = "Celebrate";   // a win deserves the body
+  if (answered?.outcome === "bad" && out.animation === "Idle") out.animation = "Concerned";
   save();
   return out;
 }
@@ -264,22 +303,33 @@ function trackFollowUp(f) {
 }
 
 // The Operator answered something Pixel asked about: close the loop according to how it went.
+// A waited-for answer is felt strongly (Pixel cared about it); the shared moment is then stored by think().
+const OUTCOME_APPRAISAL = {
+  good: { novelty: 0.5, pleasantness: 0.9, goalRelevance: 0.9, goalCongruence: 0.9, agency: "operator", controllability: 0.6, certainty: 0.95,
+    normCompatibility: 0.8, relationshipRelevance: 0.95, expectedness: 0.4, copingPotential: 0.8, operatorSupport: 0 },
+  bad: { novelty: 0.4, pleasantness: -0.7, goalRelevance: 0.9, goalCongruence: -0.8, agency: "circumstance", controllability: 0.3, certainty: 0.9,
+    normCompatibility: 0.5, relationshipRelevance: 0.95, expectedness: 0.4, copingPotential: 0.5, operatorSupport: 0 },
+};
 function closeFollowUp(out) {
   const a = out.followUpAnswer;
-  if (!a) return;
+  if (!a) return null;
   const f = followups.find((x) => x.id === a.id && x.status === "asked");
-  if (!f || a.outcome === "unclear") return;
+  if (!f || a.outcome === "unclear") return null;
   f.status = "closed"; f.outcome = a.outcome; f.closedAt = new Date().toISOString();
-  if (a.outcome === "good") {
-    if (a.sharedMoment && !SECRET.test(a.sharedMoment)) Mem.encodeEpisode(mem, { gist: a.sharedMoment, details: [], people: [], places: [],
-      topics: [f.subject], importance: 0.85, arousal: 0.8, valence: 0.9, relationshipMeaning: 0.9, shared: true }, Date.now(), `fu_${f.id}`);
-    if (!["Celebrate", "HappyJump"].includes(out.animation)) out.animation = "Celebrate";   // a win deserves the body
-  }
+  if (OUTCOME_APPRAISAL[a.outcome]) Affect.feel(affect, OUTCOME_APPRAISAL[a.outcome], Date.now(), `fu_${f.id}`);
   if (a.outcome === "bad" && !f.care) {        // not another nag: one quiet check-in tomorrow, then let it be
     followups.push({ id: newId(), subject: `איך הוא מרגיש אחרי ${f.subject}`, eventAt: null, askAfter: israelAt(1, 11),
       intent: "support", status: "pending", care: true, createdAt: f.closedAt });
-    if (out.animation === "Idle") out.animation = "Concerned";
   }
+  const shared = a.outcome === "good" && a.sharedMoment && !SECRET.test(a.sharedMoment) ? a.sharedMoment : null;
+  return { outcome: a.outcome, subject: f.subject, sharedMoment: shared, evt: `fu_${f.id}` };
+}
+
+// An experience is stored with Pixel's actual feeling at that moment (60% the core, 40% the model's read of the event).
+function emotionallyTagged(c) {
+  const arousal = 0.6 * Affect.arousalPeak(affect) + 0.4 * (Number(c.arousal) || 0);
+  const valence = 0.6 * Affect.valenceNow(affect) + 0.4 * (Number(c.valence) || 0);
+  return { ...c, arousal: Math.min(1, arousal), valence: Math.max(-1, Math.min(1, valence)) };
 }
 
 // What's going on when the Operator opens the app — decides whether Pixel should speak first, and about what.
@@ -311,6 +361,7 @@ function openingSituation() {
 async function greet() {
   // "sleep": while the Operator was away, near-duplicate episodes get consolidated (at most every 12h)
   if (Date.now() - (mem.lastConsolidatedAt || 0) > 12 * 3600e3) Mem.consolidate(mem, Date.now());
+  Affect.advance(affect, Date.now());          // while the Operator was away, feelings faded and the mood settled
   const s = openingSituation();
   if (!s.reasons.length) { save(); return { silent: true, reasons: [] }; }   // nothing worth interrupting for — silence is fine
   // at most ONE topic, by priority: what happened > what's about to happen > tomorrow's thing
@@ -351,6 +402,10 @@ const VOICE = {
 };
 
 function speak(text) {
+  // the voice carries the feeling: brighter/faster when excited, lower/slower when sad (offsets on the base voice)
+  const tone = Affect.embody(Affect.advance(affect, Date.now())).voice;
+  const hz = parseInt(VOICE.pitch, 10) + tone.pitchHz, pct = parseInt(VOICE.rate, 10) + tone.ratePct;
+  const pitch = `${hz >= 0 ? "+" : ""}${hz}Hz`, rate = `${pct >= 0 ? "+" : ""}${pct}%`;
   // emojis and symbols are read aloud badly — strip them
   const clean = text.replace(/[\p{Extended_Pictographic}‍️]/gu, "").replace(/\s+/g, " ").trim().slice(0, 600);
   if (!clean) return Promise.reject(new Error("empty text"));
@@ -358,7 +413,7 @@ function speak(text) {
   const txt = out.replace(/\.mp3$/, ".txt");
   fs.writeFileSync(txt, clean, "utf8");             // via file: no shell quoting issues with Hebrew
   return new Promise((resolve, reject) => {
-    const child = spawn("python", ["-m", "edge_tts", "--voice", VOICE.name, `--pitch=${VOICE.pitch}`, `--rate=${VOICE.rate}`,
+    const child = spawn("python", ["-m", "edge_tts", "--voice", VOICE.name, `--pitch=${pitch}`, `--rate=${rate}`,
       "--file", txt, "--write-media", out]);
     let err = "";
     child.stderr.on("data", (d) => (err += d));
@@ -431,7 +486,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (url.pathname === "/api/state") {
     res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
-    res.end(JSON.stringify({ provider: PROVIDER, memory: mem, followups, history: history.slice(-20) }));
+    res.end(JSON.stringify({ provider: PROVIDER, memory: mem, affect: Affect.advance(affect, Date.now()), followups, history: history.slice(-20) }));
     return;
   }
 
