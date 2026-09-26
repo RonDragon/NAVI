@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(here, "..");
-const DATA = path.join(here, "data");
+const DATA = process.env.NAVI_DATA_DIR ? path.resolve(process.env.NAVI_DATA_DIR) : path.join(here, "data");  // tests use a scratch dir
 const PORT = Number(process.env.PORT || 8765);
 fs.mkdirSync(DATA, { recursive: true });
 
@@ -43,15 +43,26 @@ const SCHEMA = {
       type: ["object", "null"],
       properties: {
         subject: { type: "string" },          // short Hebrew, e.g. "הראיון בחברת X"
-        eventAt: { type: "string" },          // ISO 8601 with +03:00/+02:00 offset
+        eventAt: { type: ["string", "null"] }, // ISO 8601 with offset; null for ongoing things ("finishing the presentation")
         askAfter: { type: "string" },         // ISO 8601 — when it's natural to ask
         intent: { type: "string", enum: FOLLOWUP_INTENTS },
       },
       required: ["subject", "eventAt", "askAfter", "intent"],
       additionalProperties: false,
     },
+    // the Operator just answered something you asked about (closes the loop — GPT review §C)
+    followUpAnswer: {
+      type: ["object", "null"],
+      properties: {
+        id: { type: "string" },               // id from "Waiting for an answer"
+        outcome: { type: "string", enum: ["good", "bad", "neutral", "declined", "unclear"] },
+        sharedMoment: { type: ["string", "null"] }, // good news worth remembering together, Hebrew, e.g. "היינו יחד כשסיפר שקיבל את העבודה"
+      },
+      required: ["id", "outcome", "sharedMoment"],
+      additionalProperties: false,
+    },
   },
-  required: ["reply", "mood", "animation", "face", "remember", "followUp"],
+  required: ["reply", "mood", "animation", "face", "remember", "followUp", "followUpAnswer"],
   additionalProperties: false,
 };
 const SCHEMA_FILE = path.join(DATA, "reply-schema.json");
@@ -85,10 +96,16 @@ function nowLabel(d = new Date()) {
 }
 
 function contextBlock() {
-  const facts = memory.length ? memory.map((m) => `- ${m.fact}`).join("\n") : "- (nothing yet — you just met)";
+  const facts = memory.filter((m) => m.type !== "shared").map((m) => `- ${m.fact}`);
+  const shared = memory.filter((m) => m.type === "shared").slice(-5).map((m) => `- ${m.fact}`);
   const open = followups.filter((f) => f.status === "pending");
-  const fu = open.length ? open.map((f) => `- ${f.subject} (event ${f.eventAt}, ask after ${f.askAfter})`).join("\n") : "- (none)";
-  return `## What you know about the Operator\n${facts}\n\n## Things you're waiting to hear about (already tracked — don't create duplicates)\n${fu}\n\n## Now\n${nowLabel()}`;
+  const fu = open.length ? open.map((f) => `- ${f.subject} (${f.eventAt ? `event ${f.eventAt}` : "ongoing"}, ask after ${f.askAfter})`).join("\n") : "- (none)";
+  const asked = followups.filter((f) => f.status === "asked" && Date.now() - Date.parse(f.askedAt) < 12 * 3600e3);
+  const waiting = asked.length ? asked.map((f) => `- id=${f.id}: you asked about "${f.subject}"`).join("\n") : "- (none)";
+  return `## What you know about the Operator\n${facts.join("\n") || "- (nothing yet — you just met)"}\n\n` +
+    (shared.length ? `## Moments you shared\n${shared.join("\n")}\n\n` : "") +
+    `## Things you're waiting to hear about (already tracked — don't create duplicates)\n${fu}\n\n` +
+    `## Waiting for an answer (if this message answers one, fill followUpAnswer with its id)\n${waiting}\n\n## Now\n${nowLabel()}`;
 }
 
 // ---------- providers ----------
@@ -169,57 +186,111 @@ async function think(turn) {
     memory.push({ fact: out.remember, at: new Date().toISOString() });
   }
   trackFollowUp(out.followUp);
+  if (turn.kind === "message") closeFollowUp(out);
   save();
   return out;
 }
 
-// ---------- Follow-up Engine (Bible §15.4): remember future events, ask about them once ----------
+// ---------- Follow-up Engine (Bible §15.4 + GPT review): BEFORE → DURING → AFTER → closed ----------
+// Lifecycle:  pending ──(evening before: offer to prepare)──(~1h before: short nudge)──(during: stay quiet)
+//             ──(askAfter: ask once)──> asked ──(Operator's answer)──> closed{good|bad|neutral|declined}
+//             bad → one gentle care check-in next day (never a nag); declined → dropped for good.
+const newId = () => Math.random().toString(36).slice(2, 10);
+const t = (iso) => (iso ? Date.parse(iso) : NaN);
+
+function israelAt(daysAhead, hour) {            // ISO for Israel local HH:00, N days from today
+  const d = new Date(Date.now() + daysAhead * 86400e3);
+  const [date, off] = [nowLabel(d).slice(0, 10), nowLabel(d).slice(19, 25)];
+  return `${date}T${String(hour).padStart(2, "0")}:00:00${off}`;
+}
+
 function trackFollowUp(f) {
   if (!f || !f.subject) return;
-  const eventAt = Date.parse(f.eventAt), askAfter = Date.parse(f.askAfter);
-  if (Number.isNaN(eventAt) || Number.isNaN(askAfter)) return;
-  if (eventAt < Date.now() - 36 * 3600e3) return;                        // already long past
-  if (followups.some((x) => x.status === "pending" && (x.subject === f.subject || Math.abs(Date.parse(x.eventAt) - eventAt) < 3600e3))) return;
-  followups.push({ id: Math.random().toString(36).slice(2, 10), subject: f.subject, eventAt: f.eventAt, askAfter: f.askAfter,
+  const eventAt = t(f.eventAt), askAfter = t(f.askAfter);
+  if (Number.isNaN(askAfter)) return;
+  if (!Number.isNaN(eventAt) && eventAt < Date.now() - 36 * 3600e3) return;   // already long past
+  const dup = followups.some((x) => (x.status === "pending" || x.status === "asked") && (x.subject === f.subject
+    || (!Number.isNaN(eventAt) && x.eventAt && Math.abs(t(x.eventAt) - eventAt) < 3600e3)));
+  if (dup) return;
+  followups.push({ id: newId(), subject: f.subject, eventAt: Number.isNaN(eventAt) ? null : f.eventAt, askAfter: f.askAfter,
     intent: FOLLOWUP_INTENTS.includes(f.intent) ? f.intent : "ask_outcome", status: "pending", createdAt: new Date().toISOString() });
 }
 
-// What's going on when the Operator opens the app — decides whether Pixel should speak first.
+// The Operator answered something Pixel asked about: close the loop according to how it went.
+function closeFollowUp(out) {
+  const a = out.followUpAnswer;
+  if (!a) return;
+  const f = followups.find((x) => x.id === a.id && x.status === "asked");
+  if (!f || a.outcome === "unclear") return;
+  f.status = "closed"; f.outcome = a.outcome; f.closedAt = new Date().toISOString();
+  if (a.outcome === "good") {
+    if (a.sharedMoment && !SECRET.test(a.sharedMoment)) memory.push({ fact: a.sharedMoment, type: "shared", at: f.closedAt });
+    if (!["Celebrate", "HappyJump"].includes(out.animation)) out.animation = "Celebrate";   // a win deserves the body
+  }
+  if (a.outcome === "bad" && !f.care) {        // not another nag: one quiet check-in tomorrow, then let it be
+    followups.push({ id: newId(), subject: `איך הוא מרגיש אחרי ${f.subject}`, eventAt: null, askAfter: israelAt(1, 11),
+      intent: "support", status: "pending", care: true, createdAt: f.closedAt });
+    if (out.animation === "Idle") out.animation = "Concerned";
+  }
+}
+
+// What's going on when the Operator opens the app — decides whether Pixel should speak first, and about what.
 function openingSituation() {
   const now = Date.now();
-  for (const f of followups) if (f.status === "pending" && Date.parse(f.eventAt) < now - 4 * 86400e3) f.status = "expired";
-  const last = history.length ? Date.parse(history[history.length - 1].at) : null;
+  const hour = Number(nowLabel().slice(11, 13));
+  for (const f of followups) {
+    if (f.status !== "pending") continue;
+    const ref = f.eventAt ? t(f.eventAt) : t(f.askAfter);
+    if (ref < now - 4 * 86400e3) f.status = "expired";
+  }
+  const last = history.length ? t(history[history.length - 1].at) : null;
   const gapMin = last ? Math.round((now - last) / 60000) : null;
-  const due = followups.filter((f) => f.status === "pending" && Date.parse(f.askAfter) <= now)
-    .sort((a, b) => Date.parse(b.eventAt) - Date.parse(a.eventAt));
-  const soon = followups.filter((f) => f.status === "pending" && !f.encouragedAt
-    && Date.parse(f.eventAt) > now && Date.parse(f.eventAt) - now < 3 * 3600e3);
+  const open = followups.filter((f) => f.status === "pending");
+  const during = (f) => f.eventAt && t(f.eventAt) <= now && now < t(f.eventAt) + 2 * 3600e3;
+  const due = open.filter((f) => t(f.askAfter) <= now && !during(f)).sort((a, b) => t(b.askAfter) - t(a.askAfter));
+  const soon = open.filter((f) => f.eventAt && !f.encouragedAt && t(f.eventAt) > now && t(f.eventAt) - now <= 90 * 60e3);
+  const eveningBefore = open.filter((f) => f.eventAt && !f.preparedAt && hour >= 17 && hour <= 22
+    && t(f.eventAt) - now > 8 * 3600e3 && t(f.eventAt) - now <= 20 * 3600e3);
   const reasons = [];
   if (gapMin === null) reasons.push("first_meeting");
   if (due.length) reasons.push("followup_due");
   if (soon.length) reasons.push("event_soon");
+  if (eveningBefore.length) reasons.push("evening_before");
   if (gapMin !== null && gapMin >= 180) reasons.push("back_after_a_while");
-  return { gapMin, due, soon, reasons };
+  return { gapMin, due, soon, eveningBefore, reasons };
 }
 
 async function greet() {
   const s = openingSituation();
   if (!s.reasons.length) { save(); return { silent: true, reasons: [] }; }   // nothing worth interrupting for — silence is fine
-  const pick = s.due[0] || s.soon[0] || null;
+  // at most ONE topic, by priority: what happened > what's about to happen > tomorrow's thing
+  let pick = null, phase = null;
+  if (s.due[0]) [pick, phase] = [s.due[0], "after"];
+  else if (s.soon[0]) [pick, phase] = [s.soon[0], "soon"];
+  else if (s.eveningBefore[0]) [pick, phase] = [s.eveningBefore[0], "before"];
+  const topic = {
+    after: pick && (pick.care
+      ? `A day ago the Operator had a hard time with this. Check in very gently, one short line, no pressure: "${pick.subject}".`
+      : pick.eventAt
+        ? `Follow-up due — ask briefly and warmly how this went: "${pick.subject}" (was at ${pick.eventAt}).`
+        : `Ongoing thing — ask lightly how it's progressing: "${pick.subject}".`),
+    soon: pick && `It's about to happen (${pick.eventAt}): "${pick.subject}". A tiny, practical nudge — a few words, no speech.`,
+    before: pick && `It's tomorrow (${pick.eventAt}): "${pick.subject}". Offer once, casually, to help get ready tonight.`,
+  }[phase];
   const lines = [
     "The Operator just opened the app and is looking at you. Say the first thing, like a friend who noticed them.",
     `Time since your last exchange: ${s.gapMin === null ? "never talked before" : `${s.gapMin} minutes`}.`,
-    pick && s.due[0] === pick ? `Follow-up due — ask briefly and warmly how this went: "${pick.subject}" (was at ${pick.eventAt}).` : "",
-    pick && s.soon[0] === pick ? `Coming up soon — a short, practical word of encouragement: "${pick.subject}" at ${pick.eventAt}.` : "",
+    topic || "",
     "Rules: at most ONE topic. One or two short sentences. Match the time of day. Never guilt the Operator for being away.",
-    "If nothing special, a light natural opener is enough. followUp must be null unless the Operator told you something new.",
+    "If nothing special, a light natural opener is enough. followUp and followUpAnswer must be null here.",
   ].filter(Boolean).join("\n");
   const out = await think({ kind: "event", text: lines });
-  // each follow-up is asked once (maxAttempts 1); an encouragement before the event doesn't close it
-  if (pick && s.due[0] === pick) { pick.status = "asked"; pick.askedAt = new Date().toISOString(); }
-  else if (pick) pick.encouragedAt = new Date().toISOString();
+  const now = new Date().toISOString();
+  if (phase === "after") { pick.status = "asked"; pick.askedAt = now; }       // asked once; the answer closes it
+  if (phase === "soon") pick.encouragedAt = now;
+  if (phase === "before") pick.preparedAt = now;
   save();
-  return { ...out, silent: false, reasons: s.reasons };
+  return { ...out, silent: false, reasons: s.reasons, phase };
 }
 
 // ---------- voice (edge-tts: free Microsoft neural Hebrew voices, no key) ----------
